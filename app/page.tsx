@@ -2,13 +2,14 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Monitor, Cpu, Calculator, Package, BarChart3, CheckSquare, LogOut } from "lucide-react"
+import { Monitor, Cpu, Calculator, Package, BarChart3, CheckSquare, LogOut, Store } from "lucide-react"
 import { ResumenTab } from "@/components/panel/resumen-tab"
 import { ArmadoTab } from "@/components/panel/armado-tab"
 import { CalculadoraTab } from "@/components/panel/calculadora-tab"
 import { InventarioTab } from "@/components/panel/inventario-tab"
 import { GraficosTab } from "@/components/panel/graficos-tab"
 import { ChecklistTab } from "@/components/panel/checklist-tab"
+import { CatalogoTab } from "@/components/panel/catalogo-tab"
 import { DecorativeBackground } from "@/components/decorative-background"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
@@ -244,6 +245,9 @@ export default function PanelOperativo() {
               <TabsTrigger value="checklist" className="gap-1.5 text-xs data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md">
                 <CheckSquare className="h-3.5 w-3.5" />Checklist
               </TabsTrigger>
+              <TabsTrigger value="catalogo" className="gap-1.5 text-xs data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-400 data-[state=active]:to-orange-500 data-[state=active]:text-white data-[state=active]:shadow-md">
+                <Store className="h-3.5 w-3.5" />Catálogo
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="resumen">
@@ -271,6 +275,9 @@ export default function PanelOperativo() {
             </TabsContent>
             <TabsContent value="checklist">
               <ChecklistTab checklist={checklist} setChecklist={setChecklist} initialChecklist={initialChecklist} />
+            </TabsContent>
+            <TabsContent value="catalogo">
+              <CatalogoTab stock={stock} setStock={setStock} />
             </TabsContent>
           </Tabs>
         </div>
