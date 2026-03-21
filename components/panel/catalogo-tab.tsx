@@ -7,11 +7,13 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { Plus, Trash2, Upload, Eye, EyeOff, ImageIcon, TrendingUp, TrendingDown } from "lucide-react"
+import { Plus, Trash2, Eye, EyeOff, ImageIcon, TrendingUp, TrendingDown, Download, Share2, Copy, Check } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import type { StockItem } from "@/app/page"
 
 const fmt = (n: number) => '$' + Math.round(n).toLocaleString('es-AR')
+const MARCA = "Jer Abyte"
+const LEMA = "La PC que cumple con tus exigencias diarias — vas a tener nuestra confianza y lealtad ante cualquier dificultad."
 
 interface CatalogoItem {
   id?: string
@@ -55,12 +57,115 @@ export function CatalogoTab({ stock, setStock }: CatalogoTabProps) {
   const [fotoFile, setFotoFile] = useState<File | null>(null)
   const [componentsSeleccionados, setComponentsSeleccionados] = useState<{ sidx: number; qty: number; cat: string }[]>([])
   const [margen, setMargen] = useState(25)
+  const [copiado, setCopiado] = useState(false)
 
   // Form state
   const [nombre, setNombre] = useState("")
   const [descripcion, setDescripcion] = useState("")
   const [precioVenta, setPrecioVenta] = useState("")
   const [costoTotal, setCostoTotal] = useState(0)
+
+  const linkPublico = typeof window !== 'undefined'
+    ? `${window.location.origin}/catalogo`
+    : '/catalogo'
+
+  const copiarLink = () => {
+    navigator.clipboard.writeText(linkPublico)
+    setCopiado(true)
+    setTimeout(() => setCopiado(false), 2000)
+  }
+
+  const generarPDF = async () => {
+    const disponibles = catalogo.filter(c => c.estado === 'Disponible')
+    if (disponibles.length === 0) return
+
+    const { jsPDF } = await import('jspdf')
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' })
+    const W = 210, mg = 18, cw = W - mg * 2
+
+    // Header
+    doc.setFillColor(15, 40, 80); doc.rect(0, 0, W, 36, 'F')
+    doc.setFillColor(24, 95, 165); doc.circle(mg + 8, 18, 8, 'F')
+    doc.setTextColor(255, 255, 255); doc.setFontSize(10); doc.setFont('helvetica', 'bold')
+    doc.text('JA', mg + 8, 20, { align: 'center' })
+    doc.setFontSize(20); doc.text(MARCA, mg + 20, 14)
+    doc.setFontSize(9); doc.setFont('helvetica', 'italic'); doc.setTextColor(180, 210, 255)
+    doc.text('Catalogo de PCs disponibles', mg + 20, 22)
+    doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(200, 220, 255)
+    doc.text(new Date().toLocaleDateString('es-AR'), W - mg, 14, { align: 'right' })
+
+    let y = 46
+
+    for (const item of disponibles) {
+      if (y > 230) { doc.addPage(); y = 20 }
+
+      // Intentar cargar imagen si existe
+      if (item.foto_url) {
+        try {
+          const resp = await fetch(item.foto_url)
+          const blob = await resp.blob()
+          const reader = new FileReader()
+          await new Promise<void>(resolve => {
+            reader.onload = () => {
+              try {
+                doc.addImage(reader.result as string, 'JPEG', mg, y, 50, 38)
+              } catch { }
+              resolve()
+            }
+            reader.readAsDataURL(blob)
+          })
+          // Texto al lado de la imagen
+          doc.setTextColor(15, 40, 80); doc.setFontSize(13); doc.setFont('helvetica', 'bold')
+          doc.text(item.nombre, mg + 55, y + 8)
+          if (item.descripcion) {
+            doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(80, 80, 80)
+            const lines = doc.splitTextToSize(item.descripcion, cw - 60)
+            lines.slice(0, 2).forEach((l: string, i: number) => { doc.text(l, mg + 55, y + 16 + i * 5) })
+          }
+          doc.setFontSize(16); doc.setFont('helvetica', 'bold'); doc.setTextColor(29, 158, 117)
+          doc.text(fmt(item.precio_venta), mg + 55, y + 32)
+          y += 46
+        } catch {
+          // Sin imagen
+          doc.setTextColor(15, 40, 80); doc.setFontSize(13); doc.setFont('helvetica', 'bold')
+          doc.text(item.nombre, mg, y + 6)
+          if (item.descripcion) {
+            doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(80, 80, 80)
+            doc.text(item.descripcion.slice(0, 80), mg, y + 13)
+          }
+          doc.setFontSize(14); doc.setFont('helvetica', 'bold'); doc.setTextColor(29, 158, 117)
+          doc.text(fmt(item.precio_venta), mg, y + 22)
+          y += 32
+        }
+      } else {
+        doc.setTextColor(15, 40, 80); doc.setFontSize(13); doc.setFont('helvetica', 'bold')
+        doc.text(item.nombre, mg, y + 6)
+        if (item.descripcion) {
+          doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(80, 80, 80)
+          doc.text(item.descripcion.slice(0, 80), mg, y + 13)
+        }
+        doc.setFontSize(14); doc.setFont('helvetica', 'bold'); doc.setTextColor(29, 158, 117)
+        doc.text(fmt(item.precio_venta), mg, y + 22)
+        y += 32
+      }
+
+      // Línea separadora
+      doc.setDrawColor(220, 220, 220); doc.setLineWidth(0.3)
+      doc.line(mg, y, W - mg, y)
+      y += 6
+    }
+
+    // Footer
+    const np = doc.internal.getNumberOfPages()
+    for (let p = 1; p <= np; p++) {
+      doc.setPage(p)
+      doc.setFillColor(15, 40, 80); doc.rect(0, 285, W, 12, 'F')
+      doc.setTextColor(180, 210, 255); doc.setFontSize(7.5); doc.setFont('helvetica', 'italic')
+      doc.text(LEMA, W / 2, 292, { align: 'center' })
+    }
+
+    doc.save(`JerAbyte_Catalogo_${new Date().toLocaleDateString('es-AR').replace(/\//g, '-')}.pdf`)
+  }
 
   useEffect(() => {
     cargarCatalogo()
@@ -200,7 +305,26 @@ export function CatalogoTab({ stock, setStock }: CatalogoTabProps) {
         <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
           Catálogo de PCs armadas
         </p>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs gap-1"
+            onClick={copiarLink}
+          >
+            {copiado ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+            {copiado ? "¡Copiado!" : "Copiar link"}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs gap-1"
+            onClick={generarPDF}
+            disabled={catalogo.filter(c => c.estado === 'Disponible').length === 0}
+          >
+            <Download className="h-3 w-3" />
+            PDF catálogo
+          </Button>
           <Button
             size="sm"
             variant="outline"
