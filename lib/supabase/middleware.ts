@@ -41,10 +41,11 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // Si no hay usuario y NO está en /auth/*, redirigir a login
+  // Si no hay usuario y NO está en /auth/* ni en /catalogo, redirigir a login
   const isAuthRoute = request.nextUrl.pathname.startsWith('/auth')
+  const isPublicRoute = request.nextUrl.pathname.startsWith('/catalogo')
   
-  if (!user && !isAuthRoute) {
+  if (!user && !isAuthRoute && !isPublicRoute) {
     const url = request.nextUrl.clone()
     url.pathname = '/auth/login'
     return NextResponse.redirect(url)
