@@ -101,7 +101,7 @@ export default function CatalogoPublico() {
                       <div className="text-xl font-bold text-emerald-600">{fmt(item.precio_venta)}</div>
                     </div>
                     <a
-                      href="https://wa.me/+549TUNUMERO?text=Hola!%20Vi%20el%20catálogo%20de%20Jer%20Abyte%20y%20me%20interesa%20la%20PC:%20"
+                      href="https://wa.me/+5493512272839?text=Hola!%20Vi%20el%20catálogo%20de%20Jer%20Abyte%20y%20me%20interesa%20la%20PC:%20"
                       target="_blank"
                       rel="noopener noreferrer"
                       className="bg-green-500 hover:bg-green-600 text-white text-xs font-medium px-3 py-2 rounded-lg transition-colors"
