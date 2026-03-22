@@ -144,7 +144,23 @@ export function InventarioTab({ stock, setStock, loading = false }: InventarioTa
                                   {estado === 'moderado' && <Badge className="text-[8px] px-1.5 py-0 bg-amber-100 text-amber-700 border-amber-300">Moderado</Badge>}
                                   {estado === 'ok' && <Badge className="text-[8px] px-1.5 py-0 bg-emerald-100 text-emerald-700 border-emerald-300">OK</Badge>}
                                 </div>
-                                <p className="text-[10px] text-muted-foreground">Costo: {fmt(item.precio)} · Min: {item.min}</p>
+                                <p className="text-[10px] text-muted-foreground">Min: {item.min}</p>
+                                <div className="flex items-center gap-1.5 mt-1">
+                                  <span className="text-[10px] text-muted-foreground">Costo:</span>
+                                  <input
+                                    type="number"
+                                    defaultValue={item.precio}
+                                    onBlur={async (e) => {
+                                      const nuevo = parseFloat(e.target.value) || 0
+                                      if (nuevo !== item.precio) {
+                                        const newItems = [...stock]
+                                        newItems[index] = { ...newItems[index], precio: nuevo }
+                                        await setStock(newItems)
+                                      }
+                                    }}
+                                    className="w-28 h-6 text-[11px] px-2 border border-border rounded-md bg-background text-foreground"
+                                  />
+                                </div>
                                 <div className="h-1 rounded-full bg-muted mt-1.5 overflow-hidden">
                                   <div className="h-full rounded-full transition-all" style={{ width: `${nivel}%`, backgroundColor: color }} />
                                 </div>
