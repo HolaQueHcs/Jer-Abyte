@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Monitor, Cpu, Calculator, Package, BarChart3, CheckSquare, LogOut, Store } from "lucide-react"
+import { Monitor, Cpu, Calculator, Package, BarChart3, CheckSquare, LogOut, Store, Wallet } from "lucide-react"
 import { ResumenTab } from "@/components/panel/resumen-tab"
 import { ArmadoTab } from "@/components/panel/armado-tab"
 import { CalculadoraTab } from "@/components/panel/calculadora-tab"
@@ -12,6 +12,7 @@ import { ChecklistTab } from "@/components/panel/checklist-tab"
 import { CatalogoTab } from "@/components/panel/catalogo-tab"
 import { ChecklistSidebar } from "@/components/panel/checklist-sidebar"
 import { AgendaSidebar } from "@/components/panel/agenda-sidebar"
+import { PagosTab } from "@/components/panel/pagos-tab"
 import { DecorativeBackground } from "@/components/decorative-background"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
@@ -219,6 +220,9 @@ export default function PanelOperativo() {
                   <TabsTrigger value="catalogo" className="gap-1.5 text-xs data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-400 data-[state=active]:to-orange-500 data-[state=active]:text-white data-[state=active]:shadow-md">
                     <Store className="h-3.5 w-3.5" />Catálogo
                   </TabsTrigger>
+                  <TabsTrigger value="pagos" className="gap-1.5 text-xs data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-500 data-[state=active]:to-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-md">
+                    <Wallet className="h-3.5 w-3.5" />Pagos
+                  </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="resumen">
@@ -239,6 +243,9 @@ export default function PanelOperativo() {
                 </TabsContent>
                 <TabsContent value="catalogo">
                   <CatalogoTab stock={stock} setStock={setStock} />
+                </TabsContent>
+                <TabsContent value="pagos">
+                  <PagosTab />
                 </TabsContent>
               </Tabs>
             </div>
