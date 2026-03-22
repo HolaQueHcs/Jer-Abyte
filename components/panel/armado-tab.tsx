@@ -176,7 +176,7 @@ export function ArmadoTab({ stock, setStock, armado, setArmado, margenGlobal, se
   // PDF Cliente
   const genPDFCliente = async () => {
     if (armado.length === 0) { setMensaje({ tipo: 'error', texto: 'Agrega componentes.' }); return }
-    const { jsPDF } = await import('jspdf')
+    const jspdfModule = await import('jspdf'); const jsPDF = jspdfModule.jsPDF || jspdfModule.default
     const doc = new jsPDF({ unit: 'mm', format: 'a4' })
     const W = 210, mg = 18, cw = W - mg * 2
     const nom = pcNombre.trim() || 'PC sin nombre'
@@ -292,7 +292,7 @@ export function ArmadoTab({ stock, setStock, armado, setArmado, margenGlobal, se
   // PDF Interno
   const genPDFInterno = async () => {
     if (armado.length === 0) { setMensaje({ tipo: 'error', texto: 'Agrega componentes.' }); return }
-    const { jsPDF } = await import('jspdf')
+    const jspdfModule = await import('jspdf'); const jsPDF = jspdfModule.jsPDF || jspdfModule.default
     const doc = new jsPDF({ unit: 'mm', format: 'a4' })
     const W = 210, mg = 18, cw = W - mg * 2
     const nom = pcNombre.trim() || 'PC sin nombre'
