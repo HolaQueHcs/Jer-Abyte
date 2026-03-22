@@ -25,6 +25,7 @@ export function InventarioTab({ stock, setStock, loading = false }: InventarioTa
   const [precio, setPrecio] = useState("")
   const [cantidad, setCantidad] = useState("")
   const [minimo, setMinimo] = useState("2")
+  const [nota, setNota] = useState("")
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null)
   const [guardando, setGuardando] = useState(false)
 
@@ -36,12 +37,14 @@ export function InventarioTab({ stock, setStock, loading = false }: InventarioTa
       cat: categoria,
       precio: parseFloat(precio) || 0,
       qty: parseInt(cantidad) || 0,
-      min: parseInt(minimo) || 1
+      min: parseInt(minimo) || 1,
+      nota: nota.trim()
     }])
     setNombre("")
     setPrecio("")
     setCantidad("")
     setMinimo("2")
+    setNota("")
     setGuardando(false)
   }
 
@@ -101,6 +104,10 @@ export function InventarioTab({ stock, setStock, loading = false }: InventarioTa
               <label className="text-[10px] text-muted-foreground">Stock minimo para alerta</label>
               <Input type="number" value={minimo} onChange={(e) => setMinimo(e.target.value)} className="h-8 text-sm w-24" />
             </div>
+            <div className="space-y-1">
+              <label className="text-[10px] text-muted-foreground">📝 Nota privada (ej: dónde comprarlo)</label>
+              <Input placeholder="ej: MercadoLibre — vendedor TechStore" value={nota} onChange={(e) => setNota(e.target.value)} className="h-8 text-sm" />
+            </div>
             <Button size="sm" onClick={agregarComponente} disabled={guardando} className="h-8 text-xs">
               <Plus className="h-3 w-3 mr-1" />{guardando ? "Guardando..." : "Agregar al inventario"}
             </Button>
@@ -159,6 +166,23 @@ export function InventarioTab({ stock, setStock, loading = false }: InventarioTa
                                       }
                                     }}
                                     className="w-28 h-6 text-[11px] px-2 border border-border rounded-md bg-background text-foreground"
+                                  />
+                                </div>
+                                <div className="flex items-center gap-1.5 mt-1">
+                                  <span className="text-[10px] text-muted-foreground">📝</span>
+                                  <input
+                                    type="text"
+                                    defaultValue={item.nota || ""}
+                                    placeholder="Nota privada (ej: dónde comprarlo)"
+                                    onBlur={async (e) => {
+                                      const nueva = e.target.value.trim()
+                                      if (nueva !== (item.nota || "")) {
+                                        const newItems = [...stock]
+                                        newItems[index] = { ...newItems[index], nota: nueva }
+                                        await setStock(newItems)
+                                      }
+                                    }}
+                                    className="flex-1 h-6 text-[11px] px-2 border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground/50"
                                   />
                                 </div>
                                 <div className="h-1 rounded-full bg-muted mt-1.5 overflow-hidden">
