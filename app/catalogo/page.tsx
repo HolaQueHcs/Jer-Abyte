@@ -3,23 +3,79 @@
 import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Badge } from "@/components/ui/badge"
-import { ImageIcon, Cpu, HardDrive, Zap, Monitor, Wifi, ThumbsUp } from "lucide-react"
+import { ImageIcon, Cpu, HardDrive, Zap, Monitor, Wifi, ThumbsUp, Shield } from "lucide-react"
 
 const fmt = (n: number) => '$' + Math.round(n).toLocaleString('es-AR')
 
 const CONSEJOS = [
-  { icono: Cpu, titulo: "Elegí bien tu procesador", texto: "Para gaming, priorizá frecuencia de reloj. Para edición y multitarea, priorizá más núcleos. Un Ryzen 5 o i5 es el punto dulce para la mayoría." },
-  { icono: HardDrive, titulo: "SSD NVMe vs SATA", texto: "Un SSD NVMe es hasta 5x más rápido que uno SATA. La diferencia se nota al arrancar el sistema y abrir programas pesados. Vale la inversión." },
-  { icono: Zap, titulo: "No escatimes en la fuente", texto: "Una PSU de calidad protege todos tus componentes. Calculá el consumo total y sumá un 20% de margen. Las marcas confiables son Corsair, EVGA y Seasonic." },
-  { icono: Monitor, titulo: "RAM: velocidad y dual channel", texto: "Instalar 2 módulos de RAM en dual channel puede mejorar el rendimiento hasta un 15% comparado con un solo módulo. Siempre en pares." },
-  { icono: Wifi, titulo: "Refrigeración: clave para la vida útil", texto: "Una buena refrigeración no solo mejora el rendimiento, extiende la vida útil del procesador. El cooler stock alcanza para uso básico, pero un aftermarket vale la pena." },
-  { icono: ThumbsUp, titulo: "¿Gaming o trabajo?", texto: "Para gaming, la GPU es lo más importante. Para trabajo y diseño, invertí en RAM y CPU. Para uso mixto, equilibrá ambos. Jer Abyte te ayuda a elegir." },
+  {
+    icono: Cpu,
+    titulo: "¿Por qué elegir AMD Ryzen?",
+    texto: "Los procesadores Ryzen ofrecen más núcleos por el mismo precio que la competencia. Ideal para gaming, multitarea y streaming simultáneo. En Jer Abyte trabajamos exclusivamente con Ryzen para garantizar el mejor rendimiento por peso."
+  },
+  {
+    icono: Monitor,
+    titulo: "Ryzen 3 vs Ryzen 5: ¿Cuál te conviene?",
+    texto: "El Ryzen 3 es perfecto para uso diario, juegos en 1080p y trabajo de oficina. El Ryzen 5 da un salto enorme: gaming fluido, edición de video y streaming sin cuellos de botella. Para gaming serio, siempre recomendamos Ryzen 5."
+  },
+  {
+    icono: HardDrive,
+    titulo: "SSD + Ryzen = velocidad real",
+    texto: "Un Ryzen con SSD NVMe arranca en segundos y carga juegos hasta 5 veces más rápido que con disco rígido. Todas las PCs de Jer Abyte incluyen SSD como mínimo para que notes la diferencia desde el primer día."
+  },
+  {
+    icono: Zap,
+    titulo: "Ryzen con gráficos integrados",
+    texto: "Los modelos Ryzen con sufijo G (como el 3200G o 5600G) incluyen gráficos integrados Vega. Perfectos para empezar sin GPU dedicada y agregar una placa de video después cuando el presupuesto lo permita."
+  },
+  {
+    icono: Wifi,
+    titulo: "Placa madre compatible con Ryzen",
+    texto: "No todas las motherboards son iguales. Cada generación Ryzen tiene su socket. En Jer Abyte elegimos la placa correcta para tu procesador para que no tengas problemas de compatibilidad ni de actualización futura."
+  },
+  {
+    icono: Shield,
+    titulo: "6 meses de garantía de mano de obra",
+    texto: "Cada PC que armamos viene con 6 meses de garantía de mano de obra. Si algo falla por el armado, lo solucionamos sin costo. Tu tranquilidad es parte del precio."
+  },
+  {
+    icono: ThumbsUp,
+    titulo: "¿Gaming o trabajo con Ryzen?",
+    texto: "Un Ryzen 5 con 16GB de RAM hace las dos cosas sin problemas. Para gaming puro el Ryzen 5 5600G o superior es ideal. Para trabajo pesado como edición de video o diseño 3D, un Ryzen 7 marca la diferencia."
+  },
 ]
 
 const BANNERS = [
-  { titulo: "Armadas con precisión", subtitulo: "Cada PC pasa por pruebas de estrés antes de la entrega", color: "from-blue-600 to-blue-800" },
-  { titulo: "6 meses de garantía", subtitulo: "Garantía de mano de obra en todos nuestros equipos", color: "from-[#0f2850] to-blue-700" },
-  { titulo: "Componentes originales", subtitulo: "Solo trabajamos con partes de primera calidad", color: "from-blue-700 to-indigo-800" },
+  {
+    titulo: "Armadas con precisión y dedicación",
+    subtitulo: "Cada PC pasa por pruebas de estrés antes de la entrega. Tu equipo llega listo para usar.",
+    color: "from-blue-600 to-blue-800"
+  },
+  {
+    titulo: "6 meses de garantía de mano de obra",
+    subtitulo: "Si algo falla por el armado, lo resolvemos sin costo. Esa es nuestra palabra.",
+    color: "from-[#0f2850] to-blue-700"
+  },
+  {
+    titulo: "Solo componentes originales",
+    subtitulo: "Trabajamos únicamente con partes de primera calidad. Sin imitaciones ni componentes dudosos.",
+    color: "from-blue-700 to-indigo-800"
+  },
+  {
+    titulo: "100% AMD Ryzen",
+    subtitulo: "Elegimos Ryzen porque ofrece el mejor rendimiento por peso. Potencia real a precio justo.",
+    color: "from-indigo-700 to-blue-900"
+  },
+  {
+    titulo: "Confianza y lealtad ante todo",
+    subtitulo: "La PC que cumple con tus exigencias diarias. Estamos para vos antes, durante y después de la compra.",
+    color: "from-blue-800 to-[#0f2850]"
+  },
+  {
+    titulo: "Entrega rápida en Córdoba",
+    subtitulo: "PC armada, testeada y lista para usar. Coordinamos la entrega a tu comodidad.",
+    color: "from-blue-600 to-indigo-700"
+  },
 ]
 
 interface CatalogoItem {
@@ -51,8 +107,6 @@ export default function CatalogoPublico() {
       setLoading(false)
     }
     cargar()
-
-    // Rotar banner cada 4 segundos
     const interval = setInterval(() => setBannerIdx(i => (i + 1) % BANNERS.length), 4000)
     return () => clearInterval(interval)
   }, [])
@@ -75,15 +129,11 @@ export default function CatalogoPublico() {
           {/* Banner rotativo */}
           <div className={`bg-gradient-to-r ${banner.color} rounded-2xl p-5 border border-white/20 transition-all duration-700`}>
             <div className="text-xl font-bold mb-1">{banner.titulo}</div>
-            <div className="text-blue-200 text-sm">{banner.subtitulo}</div>
-            {/* Indicadores */}
+            <div className="text-blue-200 text-sm leading-relaxed">{banner.subtitulo}</div>
             <div className="flex gap-1.5 mt-4">
               {BANNERS.map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => setBannerIdx(i)}
-                  className={`h-1.5 rounded-full transition-all ${i === bannerIdx ? 'w-6 bg-white' : 'w-1.5 bg-white/40'}`}
-                />
+                <button key={i} onClick={() => setBannerIdx(i)}
+                  className={`h-1.5 rounded-full transition-all ${i === bannerIdx ? 'w-6 bg-white' : 'w-1.5 bg-white/40'}`} />
               ))}
             </div>
           </div>
@@ -103,28 +153,25 @@ export default function CatalogoPublico() {
           </div>
         </div>
 
-        {/* Título sección */}
+        {/* Título */}
         <div className="flex items-center justify-between mb-5">
           <div>
             <h2 className="text-xl font-bold text-gray-900">PCs disponibles</h2>
-            <p className="text-gray-500 text-sm">Equipos armados, testeados y listos para entregar</p>
+            <p className="text-gray-500 text-sm">Equipos Ryzen armados, testeados y listos para entregar</p>
           </div>
           {!loading && <Badge className="bg-emerald-100 text-emerald-700 border-0">{catalogo.length} disponibles</Badge>}
         </div>
 
-        {/* Grid de PCs */}
+        {/* Grid */}
         {loading ? (
           <div className="text-center py-16 text-gray-400">Cargando catálogo...</div>
         ) : catalogo.length === 0 ? (
           <div className="text-center py-16 bg-white rounded-2xl border border-gray-100">
             <div className="text-gray-400 text-lg mb-2">No hay PCs disponibles en este momento</div>
             <p className="text-gray-400 text-sm mb-4">Volvé pronto o contactanos para consultas</p>
-            <a
-              href="https://wa.me/54?text=Hola!%20Vi%20el%20cat%C3%A1logo%20de%20Jer%20Abyte%20y%20quer%C3%ADa%20consultar"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-            >
+            <a href="https://wa.me/54?text=Hola!%20Vi%20el%20cat%C3%A1logo%20de%20Jer%20Abyte%20y%20quer%C3%ADa%20consultar"
+              target="_blank" rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
               Consultar por WhatsApp
             </a>
           </div>
@@ -146,20 +193,15 @@ export default function CatalogoPublico() {
                     <h3 className="font-semibold text-gray-900 leading-tight">{item.nombre}</h3>
                     <Badge className="bg-emerald-100 text-emerald-700 border-0 text-[10px] shrink-0">Disponible</Badge>
                   </div>
-                  {item.descripcion && (
-                    <p className="text-gray-500 text-sm mb-3 leading-relaxed">{item.descripcion}</p>
-                  )}
+                  {item.descripcion && <p className="text-gray-500 text-sm mb-3 leading-relaxed">{item.descripcion}</p>}
                   <div className="flex items-center justify-between pt-3 border-t border-gray-100">
                     <div>
                       <div className="text-[10px] text-gray-400 mb-0.5">Precio</div>
                       <div className="text-2xl font-bold text-emerald-600">{fmt(item.precio_venta)}</div>
                     </div>
-                    <a
-                      href={`https://wa.me/54?text=Hola!%20Vi%20el%20cat%C3%A1logo%20de%20Jer%20Abyte%20y%20me%20interesa%20la%20PC:%20${encodeURIComponent(item.nombre)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="bg-green-500 hover:bg-green-600 text-white text-sm font-medium px-4 py-2 rounded-xl transition-colors"
-                    >
+                    <a href={`https://wa.me/54?text=Hola!%20Vi%20el%20cat%C3%A1logo%20de%20Jer%20Abyte%20y%20me%20interesa%20la%20PC:%20${encodeURIComponent(item.nombre)}`}
+                      target="_blank" rel="noopener noreferrer"
+                      className="bg-green-500 hover:bg-green-600 text-white text-sm font-medium px-4 py-2 rounded-xl transition-colors">
                       Consultar
                     </a>
                   </div>
@@ -178,7 +220,7 @@ export default function CatalogoPublico() {
         <p className="text-blue-200 text-sm px-4 max-w-lg mx-auto leading-relaxed">
           Jer Abyte — La PC que cumple con tus exigencias diarias, vas a tener nuestra confianza y lealtad ante cualquier dificultad.
         </p>
-        <p className="text-blue-300 text-xs mt-2">Garantía de mano de obra: 6 meses</p>
+        <p className="text-blue-300 text-xs mt-2">Garantía de mano de obra: 6 meses · 100% AMD Ryzen</p>
       </div>
     </div>
   )
