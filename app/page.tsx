@@ -13,6 +13,7 @@ import { CatalogoTab } from "@/components/panel/catalogo-tab"
 import { ChecklistSidebar } from "@/components/panel/checklist-sidebar"
 import { AgendaSidebar } from "@/components/panel/agenda-sidebar"
 import { PagosTab } from "@/components/panel/pagos-tab"
+import { PcsTab } from "@/components/panel/pcs-tab"
 import { DecorativeBackground } from "@/components/decorative-background"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
@@ -154,7 +155,7 @@ export default function PanelOperativo() {
     await cargarMetricas()
   }
 
-  const guardarPcArmada = async (precioFinal: number = 0, cliente: string = "", nombrePc: string = "") => {
+  const guardarPcArmada = async (precioFinal: number = 0, cliente: string = "", nombrePc: string = "", componentes: any[] = [], costoTotal: number = 0) => {
     const hoy = new Date().toISOString().split("T")[0]
     const { data: ex } = await supabase.from("metricas").select("*").eq("fecha", hoy).single()
     if (ex) {
@@ -162,7 +163,18 @@ export default function PanelOperativo() {
     } else {
       await supabase.from("metricas").insert({ fecha: hoy, ventas_total: 0, ganancia_total: 0, pc_armadas: 1 })
     }
-    // Crear registro automático en pagos_parciales
+    // Guardar PC armada con todos sus componentes
+    const margen = costoTotal > 0 ? Math.round(((precioFinal - costoTotal) / costoTotal) * 100) : 0
+    await supabase.from("pcs_armadas").insert({
+      nombre: nombrePc || "PC sin nombre",
+      cliente: cliente || "",
+      componentes,
+      costo_total: costoTotal,
+      precio_venta: precioFinal,
+      margen,
+      estado: "En stock"
+    })
+    // Crear registro en pagos_parciales
     if (precioFinal > 0) {
       await supabase.from("pagos_parciales").insert({
         cliente: cliente || "Sin nombre",
@@ -170,7 +182,8 @@ export default function PanelOperativo() {
         total: precioFinal,
         pagado: 0,
         pagos: [],
-        estado: "Pendiente"
+        estado: "Pendiente",
+        cuotas: 1
       })
     }
     await cargarMetricas()
@@ -248,8 +261,8 @@ export default function PanelOperativo() {
                   <TabsTrigger value="pagos" className="gap-1.5 text-xs data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-500 data-[state=active]:to-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-md">
                     <Wallet className="h-3.5 w-3.5" />Pagos
                   </TabsTrigger>
-                  <TabsTrigger value="ventas" className="gap-1.5 text-xs data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md">
-                    <ShoppingBag className="h-3.5 w-3.5" />Ventas
+                  <TabsTrigger value="pcs" className="gap-1.5 text-xs data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md">
+                    <Cpu className="h-3.5 w-3.5" />PCs armadas
                   </TabsTrigger>
                 </TabsList>
 
@@ -274,6 +287,9 @@ export default function PanelOperativo() {
                 </TabsContent>
                 <TabsContent value="pagos">
                   <PagosTab />
+                </TabsContent>
+                <TabsContent value="pcs">
+                  <PcsTab onVentaRegistrada={guardarVenta} />
                 </TabsContent>
               </Tabs>
             </div>
