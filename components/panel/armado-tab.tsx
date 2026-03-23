@@ -98,8 +98,6 @@ export function ArmadoTab({ stock, setStock, armado, setArmado, margenGlobal, se
     const factor = precioFinalNum / totalCosto
     return armado.map(a => ({ ...a, pventa: Math.round(a.pcosto * factor) }))
   }
-  const totalVenta = armado.reduce((sum, a) => sum + (a.pventa * a.qty), 0)
-  const ganancia = totalVenta - totalCosto
 
   const aplicarMargen = () => {
     setArmado(armado.map(a => ({ ...a, pventa: Math.round(a.pcosto * (1 + margenGlobal / 100)) })))
