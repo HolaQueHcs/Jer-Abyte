@@ -13,7 +13,6 @@ import { CatalogoTab } from "@/components/panel/catalogo-tab"
 import { ChecklistSidebar } from "@/components/panel/checklist-sidebar"
 import { AgendaSidebar } from "@/components/panel/agenda-sidebar"
 import { PagosTab } from "@/components/panel/pagos-tab"
-import { VentasTab } from "@/components/panel/ventas-tab"
 import { DecorativeBackground } from "@/components/decorative-background"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
@@ -275,9 +274,6 @@ export default function PanelOperativo() {
                 </TabsContent>
                 <TabsContent value="pagos">
                   <PagosTab />
-                </TabsContent>
-                <TabsContent value="ventas">
-                  <VentasTab onVentasChange={cargarMetricas} />
                 </TabsContent>
               </Tabs>
             </div>
