@@ -51,7 +51,7 @@ interface ArmadoTabProps {
   margenGlobal: number
   setMargenGlobal: React.Dispatch<React.SetStateAction<number>>
   setPcArmadas: React.Dispatch<React.SetStateAction<number>>
-  onPcArmada?: (precioFinal: number, cliente: string, nombrePc: string) => Promise<void>
+  onPcArmada?: (precioFinal: number, cliente: string, nombrePc: string, componentes: any[], costoTotal: number) => Promise<void>
   onRegistrarVenta?: (monto: number, costo: number, cliente: string, descripcion: string) => Promise<void>
 }
 
@@ -173,7 +173,7 @@ export function ArmadoTab({ stock, setStock, armado, setArmado, margenGlobal, se
     })
     await setStock(newStock)
     setPcArmadas(p => p + 1)
-    if (onPcArmada) await onPcArmada(precioFinalNum, pcCliente.trim(), pcNombre.trim())
+    if (onPcArmada) await onPcArmada(precioFinalNum, pcCliente.trim(), pcNombre.trim(), armado, totalCosto)
     setMensaje({ tipo: 'success', texto: 'Stock descontado. PC registrada y traspasada a Pagos.' })
   }
 
