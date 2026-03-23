@@ -51,10 +51,11 @@ interface ArmadoTabProps {
   margenGlobal: number
   setMargenGlobal: React.Dispatch<React.SetStateAction<number>>
   setPcArmadas: React.Dispatch<React.SetStateAction<number>>
-  onPcArmada?: () => Promise<void>
+  onPcArmada?: (precioFinal: number, cliente: string, nombrePc: string) => Promise<void>
+  onRegistrarVenta?: (monto: number, costo: number, cliente: string, descripcion: string) => Promise<void>
 }
 
-export function ArmadoTab({ stock, setStock, armado, setArmado, margenGlobal, setMargenGlobal, setPcArmadas, onPcArmada }: ArmadoTabProps) {
+export function ArmadoTab({ stock, setStock, armado, setArmado, margenGlobal, setMargenGlobal, setPcArmadas, onPcArmada, onRegistrarVenta }: ArmadoTabProps) {
   const [pcNombre, setPcNombre] = useState("")
   const [pcFecha, setPcFecha] = useState("")
   const [pcCliente, setPcCliente] = useState("")
@@ -70,6 +71,7 @@ export function ArmadoTab({ stock, setStock, armado, setArmado, margenGlobal, se
   const [slotQty, setSlotQty] = useState<Record<string, string>>({})
   const [slotAviso, setSlotAviso] = useState<Record<string, string>>({})
   const [expandedSlots, setExpandedSlots] = useState<Record<string, boolean>>({})
+  const [precioFinalManual, setPrecioFinalManual] = useState<string>("")
 
   useEffect(() => {
     setPcFecha(new Date().toLocaleDateString('es-AR'))
@@ -78,6 +80,24 @@ export function ArmadoTab({ stock, setStock, armado, setArmado, margenGlobal, se
   const precioVenta = (costo: number) => Math.round(costo * (1 + margenGlobal / 100))
 
   const totalCosto = armado.reduce((sum, a) => sum + (a.pcosto * a.qty), 0)
+  const totalVentaBase = armado.reduce((sum, a) => sum + (a.pventa * a.qty), 0)
+
+  // Precio final: usa el manual si fue editado, sino el calculado con margen
+  const precioFinalNum = precioFinalManual !== "" ? (parseFloat(precioFinalManual) || 0) : totalVentaBase
+  const totalVenta = precioFinalNum
+  const ganancia = totalVenta - totalCosto
+  const margenReal = totalCosto > 0 ? Math.round((ganancia / totalCosto) * 100) : 0
+  const enRojo = ganancia < 0
+
+  // Precio recomendado con margen actual
+  const precioRecomendado = Math.round(totalCosto * (1 + margenGlobal / 100))
+
+  // Distribuir precio final proporcionalmente entre componentes
+  const armadoConPrecioDistribuido = () => {
+    if (precioFinalManual === "" || totalCosto === 0) return armado
+    const factor = precioFinalNum / totalCosto
+    return armado.map(a => ({ ...a, pventa: Math.round(a.pcosto * factor) }))
+  }
   const totalVenta = armado.reduce((sum, a) => sum + (a.pventa * a.qty), 0)
   const ganancia = totalVenta - totalCosto
 
@@ -155,8 +175,8 @@ export function ArmadoTab({ stock, setStock, armado, setArmado, margenGlobal, se
     })
     await setStock(newStock)
     setPcArmadas(p => p + 1)
-    if (onPcArmada) await onPcArmada()
-    setMensaje({ tipo: 'success', texto: 'Stock descontado. PC registrada.' })
+    if (onPcArmada) await onPcArmada(precioFinalNum, pcCliente.trim(), pcNombre.trim())
+    setMensaje({ tipo: 'success', texto: 'Stock descontado. PC registrada y traspasada a Pagos.' })
   }
 
   const updatePrecio = (index: number, field: 'pcosto' | 'pventa', value: number) => {
@@ -174,8 +194,9 @@ export function ArmadoTab({ stock, setStock, armado, setArmado, margenGlobal, se
   const itemsSinSlot = armado.filter(a => !(a as any).slotId)
 
   // PDF Cliente
-  const genPDFCliente = async () => {
+  const genPDFCliente = async (precioFinal?: number, armadoDist?: typeof armado) => {
     if (armado.length === 0) { setMensaje({ tipo: 'error', texto: 'Agrega componentes.' }); return }
+    const armadoUsar = armadoDist || armado
     const jspdfModule = await import('jspdf'); const jsPDF = jspdfModule.jsPDF || jspdfModule.default
     const doc = new jsPDF({ unit: 'mm', format: 'a4' })
     const W = 210, mg = 18, cw = W - mg * 2
@@ -233,8 +254,8 @@ export function ArmadoTab({ stock, setStock, armado, setArmado, margenGlobal, se
 
     // Ordenar armado según orden de slots
     const armadoOrdenado = [...SLOTS.flatMap(slot =>
-      armado.filter(a => (a as any).slotId === slot.id)
-    ), ...armado.filter(a => !(a as any).slotId)]
+      armadoUsar.filter(a => (a as any).slotId === slot.id)
+    ), ...armadoUsar.filter(a => !(a as any).slotId)]
 
     let total = 0
     doc.setFont('helvetica', 'normal')
@@ -250,9 +271,12 @@ export function ArmadoTab({ stock, setStock, armado, setArmado, margenGlobal, se
       if (y > 255) { doc.addPage(); y = 20 }
     }); y += 2
 
+    // Usar precio final manual si fue definido
+    const totalFinal = precioFinal !== undefined ? precioFinal : total
+
     doc.setFillColor(15, 40, 80); doc.rect(mg, y, cw, 9, 'F')
     doc.setTextColor(255, 255, 255); doc.setFontSize(10); doc.setFont('helvetica', 'bold')
-    doc.text('Total', mg + 3, y + 6); doc.text(fmt(total), W - mg - 2, y + 6, { align: 'right' }); y += 14
+    doc.text('Total', mg + 3, y + 6); doc.text(fmt(totalFinal), W - mg - 2, y + 6, { align: 'right' }); y += 14
 
     if (obs) {
       doc.setFillColor(235, 241, 251); doc.rect(mg, y, cw, 7, 'F')
@@ -268,7 +292,7 @@ export function ArmadoTab({ stock, setStock, armado, setArmado, margenGlobal, se
     doc.setTextColor(39, 80, 10); doc.setFontSize(10); doc.setFont('helvetica', 'bold')
     doc.text('Garantia de mano de obra — ' + GARANTIA + ' meses', mg + 4, y + 7)
     doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5)
-    const gt = `${MARCA} garantiza la mano de obra de este equipo por ${GARANTIA} meses desde la fecha de entrega. Ante cualquier inconveniente derivado del proceso de armado, nos comprometemos a resolverlo sin costo adicional. Esta garantia no cubre danos fisicos, mal uso o componentes de fabrica.`
+    const gt = `${MARCA} garantiza la mano de obra de este equipo por ${GARANTIA} meses desde la fecha de entrega. La garantia cubre unicamente defectos derivados del proceso de armado. Queda excluida ante manipulacion por terceros, danos fisicos, liquidos, caidas, modificaciones no autorizadas o mal uso del equipo. Ante cualquier inconveniente dentro de los terminos, nos comprometemos a resolverlo sin costo adicional.`
     let gy = y + 13
     doc.splitTextToSize(gt, cw - 8).forEach((l: string) => { doc.text(l, mg + 4, gy); gy += 5 }); y = gy + 8
 
@@ -290,8 +314,9 @@ export function ArmadoTab({ stock, setStock, armado, setArmado, margenGlobal, se
   }
 
   // PDF Interno
-  const genPDFInterno = async () => {
+  const genPDFInterno = async (precioFinal?: number, armadoDist?: typeof armado) => {
     if (armado.length === 0) { setMensaje({ tipo: 'error', texto: 'Agrega componentes.' }); return }
+    const armadoUsar = armadoDist || armado
     const jspdfModule = await import('jspdf'); const jsPDF = jspdfModule.jsPDF || jspdfModule.default
     const doc = new jsPDF({ unit: 'mm', format: 'a4' })
     const W = 210, mg = 18, cw = W - mg * 2
@@ -325,46 +350,49 @@ export function ArmadoTab({ stock, setStock, armado, setArmado, margenGlobal, se
     }); y += 6
 
     doc.setFillColor(80, 20, 20); doc.rect(mg, y, cw, 7, 'F')
-    doc.setTextColor(255, 255, 255); doc.setFontSize(8.5); doc.setFont('helvetica', 'bold')
+    doc.setTextColor(255, 255, 255); doc.setFontSize(8); doc.setFont('helvetica', 'bold')
     doc.text('Componente', mg + 2, y + 4.8)
-    doc.text('Cat.', mg + 82, y + 4.8)
-    doc.text('Cant.', mg + 106, y + 4.8)
-    doc.text('Costo unit.', mg + 126, y + 4.8)
-    doc.text('Precio cliente', mg + 154, y + 4.8)
+    doc.text('Cat.', mg + 78, y + 4.8)
+    doc.text('Cant.', mg + 100, y + 4.8)
+    doc.text('Costo', mg + 118, y + 4.8)
+    doc.text('P.Cliente', mg + 143, y + 4.8)
     doc.text('Ganancia', W - mg - 2, y + 4.8, { align: 'right' }); y += 9
 
     const armadoOrdenado = [...SLOTS.flatMap(slot =>
-      armado.filter(a => (a as any).slotId === slot.id)
-    ), ...armado.filter(a => !(a as any).slotId)]
+      armadoUsar.filter(a => (a as any).slotId === slot.id)
+    ), ...armadoUsar.filter(a => !(a as any).slotId)]
 
     let tc = 0, tv = 0
     doc.setFont('helvetica', 'normal')
     armadoOrdenado.forEach((a, i) => {
       const sc = a.pcosto * a.qty, sv = a.pventa * a.qty, gan = sv - sc; tc += sc; tv += sv
       if (i % 2 === 0) { doc.setFillColor(255, 248, 248); doc.rect(mg, y - 3.5, cw, 8, 'F') }
-      doc.setTextColor(20, 20, 20); doc.setFontSize(8)
-      doc.text(a.nombre.length > 38 ? a.nombre.slice(0, 36) + '...' : a.nombre, mg + 2, y + 1)
-      doc.setTextColor(100, 100, 100); doc.text(a.cat, mg + 82, y + 1)
-      doc.setTextColor(20, 20, 20); doc.text(String(a.qty), mg + 109, y + 1)
+      doc.setTextColor(20, 20, 20); doc.setFontSize(7.5)
+      doc.text(a.nombre.length > 35 ? a.nombre.slice(0, 33) + '...' : a.nombre, mg + 2, y + 1)
+      doc.setTextColor(100, 100, 100); doc.text(a.cat, mg + 78, y + 1)
+      doc.setTextColor(20, 20, 20); doc.text(String(a.qty), mg + 102, y + 1)
       doc.setTextColor(160, 50, 50); doc.setFont('helvetica', 'bold')
-      doc.text(fmt(a.pcosto), mg + 148, y + 1, { align: 'right' })
+      doc.text(fmt(a.pcosto), mg + 138, y + 1, { align: 'right' })
       doc.setTextColor(39, 80, 10)
-      doc.text(fmt(a.pventa), mg + 175, y + 1, { align: 'right' })
+      doc.text(fmt(a.pventa), mg + 163, y + 1, { align: 'right' })
       doc.setTextColor(24, 95, 165)
       doc.text(fmt(gan), W - mg - 2, y + 1, { align: 'right' })
       doc.setFont('helvetica', 'normal'); y += 8
       if (y > 255) { doc.addPage(); y = 20 }
     }); y += 3
 
+    const tvFinal = precioFinal !== undefined ? precioFinal : tv
+    const gananciaFinal = tvFinal - tc
+    const margenRealFinal = tc > 0 ? Math.round((gananciaFinal / tc) * 100) : 0
+
     doc.setFillColor(80, 20, 20); doc.rect(mg, y, cw, 14, 'F')
     doc.setTextColor(255, 255, 255); doc.setFontSize(9); doc.setFont('helvetica', 'bold')
     doc.text('Totales', mg + 3, y + 5)
     doc.setTextColor(255, 180, 180); doc.text('Costo: ' + fmt(tc), mg + 35, y + 5)
-    doc.setTextColor(180, 255, 180); doc.text('Venta: ' + fmt(tv), mg + 90, y + 5)
-    doc.setTextColor(180, 210, 255); doc.text('Ganancia: ' + fmt(tv - tc), mg + 145, y + 5)
+    doc.setTextColor(180, 255, 180); doc.text('Venta: ' + fmt(tvFinal), mg + 90, y + 5)
+    doc.setTextColor(180, 210, 255); doc.text('Ganancia: ' + fmt(gananciaFinal), mg + 145, y + 5)
     doc.setTextColor(255, 255, 180); doc.setFontSize(8)
-    const margenReal = tc > 0 ? Math.round((tv - tc) / tc * 100) : 0
-    doc.text('Margen real: ' + margenReal + '%', W - mg - 2, y + 11, { align: 'right' })
+    doc.text('Margen real: ' + margenRealFinal + '%', W - mg - 2, y + 11, { align: 'right' })
 
     const np = doc.internal.getNumberOfPages()
     for (let p = 1; p <= np; p++) {
@@ -374,7 +402,7 @@ export function ArmadoTab({ stock, setStock, armado, setArmado, margenGlobal, se
       doc.text('DOCUMENTO INTERNO JER ABYTE — CONFIDENCIAL', W / 2, 292, { align: 'center' })
       doc.setFont('helvetica', 'normal'); doc.text('Pag ' + p + ' de ' + np, W - mg, 292, { align: 'right' })
     }
-    doc.save(`JerAbyte_INTERNO_${nom.replace(/[^a-z0-9]/gi, '_')}.pdf`)
+    doc.save(`JerAbyte_INTERNO_${nom.replace(/[^a-z0-9]/gi, '_')}_${cli.replace(/[^a-z0-9]/gi, '_')}.pdf`)
     setMensaje({ tipo: 'success', texto: 'PDF interno generado.' })
   }
 
@@ -618,41 +646,117 @@ export function ArmadoTab({ stock, setStock, armado, setArmado, margenGlobal, se
         </div>
       )}
 
-      {/* Totales y acciones */}
+      {/* Calculadora de precio final */}
       <Card className="border-0 bg-card/80">
-        <CardContent className="p-4">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex gap-6 flex-wrap">
-              <div>
-                <div className="text-[10px] text-muted-foreground mb-0.5">Costo real <Badge variant="destructive" className="text-[8px] ml-1">Solo vos</Badge></div>
-                <div className="text-xl font-semibold text-red-600">{fmt(totalCosto)}</div>
-              </div>
-              <div>
-                <div className="text-[10px] text-muted-foreground mb-0.5">Precio al cliente <Badge className="text-[8px] ml-1 bg-emerald-600">PDF cliente</Badge></div>
-                <div className="text-xl font-semibold text-emerald-600">{fmt(totalVenta)}</div>
-              </div>
-              <div>
-                <div className="text-[10px] text-muted-foreground mb-0.5">Ganancia estimada</div>
-                <div className="text-xl font-semibold text-blue-600">{fmt(ganancia)}</div>
-              </div>
+        <CardContent className="p-4 space-y-4">
+          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Calculadora de precio</p>
+
+          {/* Fila de métricas */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-red-50 dark:bg-red-950/20 rounded-xl p-3 border border-red-100">
+              <div className="text-[10px] text-muted-foreground mb-1">Costo real <Badge variant="destructive" className="text-[8px] ml-1">Solo vos</Badge></div>
+              <div className="text-lg font-semibold text-red-600">{fmt(totalCosto)}</div>
             </div>
-            <div className="flex gap-2 flex-wrap">
-              <Button size="sm" onClick={genPDFCliente} className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700">
-                <Download className="h-3 w-3 mr-1" />PDF Cliente
-              </Button>
-              <Button size="sm" onClick={genPDFInterno} className="h-8 text-xs">
-                <Download className="h-3 w-3 mr-1" />PDF Interno
-              </Button>
-              <Button size="sm" onClick={confirmarArmado} variant="outline" className="h-8 text-xs">
-                <Check className="h-3 w-3 mr-1" />Confirmar stock
-              </Button>
-              <Button size="sm" onClick={limpiarArmado} variant="outline" className="h-8 text-xs text-red-600 border-red-300 hover:bg-red-50">
-                <Trash2 className="h-3 w-3 mr-1" />Limpiar
-              </Button>
+            <div className="bg-blue-50 dark:bg-blue-950/20 rounded-xl p-3 border border-blue-100">
+              <div className="text-[10px] text-muted-foreground mb-1 flex items-center gap-1">
+                Recomendado
+                <span className="text-[9px] text-blue-500">({margenGlobal}% margen)</span>
+              </div>
+              <div className="text-lg font-semibold text-blue-600">{fmt(precioRecomendado)}</div>
+            </div>
+            <div className={`rounded-xl p-3 border ${enRojo ? 'bg-red-50 border-red-200' : 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-100'}`}>
+              <div className="text-[10px] text-muted-foreground mb-1">Ganancia</div>
+              <div className={`text-lg font-semibold ${enRojo ? 'text-red-600' : 'text-emerald-600'}`}>
+                {enRojo ? '' : '+'}{fmt(ganancia)}
+              </div>
+              <div className={`text-[10px] font-medium ${enRojo ? 'text-red-500' : 'text-emerald-500'}`}>
+                {margenReal}% margen real
+              </div>
             </div>
           </div>
+
+          {/* Precio final editable */}
+          <div className="space-y-2">
+            <label className="text-[10px] font-medium text-muted-foreground">
+              Precio final al cliente — editalo vos <Badge className="text-[8px] ml-1 bg-emerald-600">PDF cliente</Badge>
+            </label>
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="relative flex-1 min-w-[180px]">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-muted-foreground">$</span>
+                <input
+                  type="number"
+                  value={precioFinalManual !== "" ? precioFinalManual : precioRecomendado}
+                  onChange={e => setPrecioFinalManual(e.target.value)}
+                  className={`w-full h-10 pl-7 pr-3 text-base font-semibold border-2 rounded-xl bg-background transition-colors ${enRojo ? 'border-red-400 text-red-600' : 'border-emerald-400 text-emerald-600'}`}
+                  placeholder={String(precioRecomendado)}
+                />
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-10 text-xs"
+                onClick={() => setPrecioFinalManual(String(precioRecomendado))}
+              >
+                Usar recomendado
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-10 text-xs border-blue-300 text-blue-600 hover:bg-blue-50"
+                onClick={() => {
+                  const dist = armadoConPrecioDistribuido()
+                  setArmado(dist)
+                  setPrecioFinalManual("")
+                }}
+                title="Distribuye el precio final proporcionalmente entre todos los componentes"
+              >
+                Distribuir entre componentes
+              </Button>
+            </div>
+            {enRojo && (
+              <div className="flex items-center gap-1.5 text-red-500 text-xs">
+                <span>⚠️</span>
+                <span>El precio es menor al costo — estás perdiendo {fmt(Math.abs(ganancia))}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Botones de acción */}
+          <div className="flex gap-2 flex-wrap pt-1">
+            <Button size="sm" onClick={() => genPDFCliente(precioFinalNum, armadoConPrecioDistribuido())} className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700">
+              <Download className="h-3 w-3 mr-1" />PDF Cliente
+            </Button>
+            <Button size="sm" onClick={() => genPDFInterno(precioFinalNum, armadoConPrecioDistribuido())} className="h-8 text-xs">
+              <Download className="h-3 w-3 mr-1" />PDF Interno
+            </Button>
+            <Button size="sm" onClick={confirmarArmado} variant="outline" className="h-8 text-xs">
+              <Check className="h-3 w-3 mr-1" />Confirmar stock
+            </Button>
+            {onRegistrarVenta && (
+              <Button
+                size="sm"
+                onClick={async () => {
+                  await confirmarArmado()
+                  await onRegistrarVenta(
+                    precioFinalNum,
+                    totalCosto,
+                    pcCliente,
+                    pcNombre || "PC armada"
+                  )
+                  setMensaje({ tipo: 'success', texto: 'Stock descontado y venta registrada.' })
+                }}
+                className="h-8 text-xs bg-blue-600 hover:bg-blue-700"
+              >
+                <Check className="h-3 w-3 mr-1" />Confirmar + Registrar venta
+              </Button>
+            )}
+            <Button size="sm" onClick={limpiarArmado} variant="outline" className="h-8 text-xs text-red-600 border-red-300 hover:bg-red-50">
+              <Trash2 className="h-3 w-3 mr-1" />Limpiar
+            </Button>
+          </div>
+
           {mensaje && (
-            <p className={`text-xs mt-2 ${mensaje.tipo === 'success' ? 'text-emerald-600' : 'text-red-600'}`}>{mensaje.texto}</p>
+            <p className={`text-xs ${mensaje.tipo === 'success' ? 'text-emerald-600' : 'text-red-600'}`}>{mensaje.texto}</p>
           )}
         </CardContent>
       </Card>
