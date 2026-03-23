@@ -174,18 +174,6 @@ export default function PanelOperativo() {
       margen,
       estado: "En stock"
     })
-    // Crear registro en pagos_parciales
-    if (precioFinal > 0) {
-      await supabase.from("pagos_parciales").insert({
-        cliente: cliente || "Sin nombre",
-        descripcion: nombrePc || "PC armada",
-        total: precioFinal,
-        pagado: 0,
-        pagos: [],
-        estado: "Pendiente",
-        cuotas: 1
-      })
-    }
     await cargarMetricas()
   }
 
