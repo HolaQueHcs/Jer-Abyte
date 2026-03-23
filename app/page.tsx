@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Monitor, Cpu, Calculator, Package, BarChart3, CheckSquare, LogOut, Store, Wallet } from "lucide-react"
+import { Monitor, Cpu, Calculator, Package, BarChart3, CheckSquare, LogOut, Store, Wallet, ShoppingBag } from "lucide-react"
 import { ResumenTab } from "@/components/panel/resumen-tab"
 import { ArmadoTab } from "@/components/panel/armado-tab"
 import { CalculadoraTab } from "@/components/panel/calculadora-tab"
@@ -13,6 +13,7 @@ import { CatalogoTab } from "@/components/panel/catalogo-tab"
 import { ChecklistSidebar } from "@/components/panel/checklist-sidebar"
 import { AgendaSidebar } from "@/components/panel/agenda-sidebar"
 import { PagosTab } from "@/components/panel/pagos-tab"
+import { VentasTab } from "@/components/panel/ventas-tab"
 import { DecorativeBackground } from "@/components/decorative-background"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
@@ -130,7 +131,7 @@ export default function PanelOperativo() {
 
   const guardarVenta = async (monto: number, costo: number) => {
     const ganancia = monto - costo
-    await supabase.from("ventas").insert({ monto, costo, ganancia })
+    await supabase.from("ventas").insert({ monto, costo, ganancia, fecha: new Date().toISOString().split("T")[0] })
     const hoy = new Date().toISOString().split("T")[0]
     const { data: ex } = await supabase.from("metricas").select("*").eq("fecha", hoy).single()
     if (ex) {
@@ -141,13 +142,37 @@ export default function PanelOperativo() {
     await cargarMetricas()
   }
 
-  const guardarPcArmada = async () => {
+  const guardarVentaCompleta = async (monto: number, costo: number, cliente: string, descripcion: string) => {
+    const ganancia = monto - costo
+    const hoy = new Date().toISOString().split("T")[0]
+    await supabase.from("ventas").insert({ monto, costo, ganancia, cliente, descripcion, fecha: hoy })
+    const { data: ex } = await supabase.from("metricas").select("*").eq("fecha", hoy).single()
+    if (ex) {
+      await supabase.from("metricas").update({ ventas_total: parseFloat(ex.ventas_total) + monto, ganancia_total: parseFloat(ex.ganancia_total) + ganancia, updated_at: new Date().toISOString() }).eq("fecha", hoy)
+    } else {
+      await supabase.from("metricas").insert({ fecha: hoy, ventas_total: monto, ganancia_total: ganancia, pc_armadas: 0 })
+    }
+    await cargarMetricas()
+  }
+
+  const guardarPcArmada = async (precioFinal: number = 0, cliente: string = "", nombrePc: string = "") => {
     const hoy = new Date().toISOString().split("T")[0]
     const { data: ex } = await supabase.from("metricas").select("*").eq("fecha", hoy).single()
     if (ex) {
       await supabase.from("metricas").update({ pc_armadas: ex.pc_armadas + 1 }).eq("fecha", hoy)
     } else {
       await supabase.from("metricas").insert({ fecha: hoy, ventas_total: 0, ganancia_total: 0, pc_armadas: 1 })
+    }
+    // Crear registro automático en pagos_parciales
+    if (precioFinal > 0) {
+      await supabase.from("pagos_parciales").insert({
+        cliente: cliente || "Sin nombre",
+        descripcion: nombrePc || "PC armada",
+        total: precioFinal,
+        pagado: 0,
+        pagos: [],
+        estado: "Pendiente"
+      })
     }
     await cargarMetricas()
   }
@@ -224,13 +249,16 @@ export default function PanelOperativo() {
                   <TabsTrigger value="pagos" className="gap-1.5 text-xs data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-500 data-[state=active]:to-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-md">
                     <Wallet className="h-3.5 w-3.5" />Pagos
                   </TabsTrigger>
+                  <TabsTrigger value="ventas" className="gap-1.5 text-xs data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md">
+                    <ShoppingBag className="h-3.5 w-3.5" />Ventas
+                  </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="resumen">
                   <ResumenTab ventas={ventas} gananciaTotal={gananciaTotal} pcArmadas={pcArmadas} stockBajo={stockBajo} setVentas={setVentas} setGananciaTotal={setGananciaTotal} setTotalVendido={setTotalVendido} setTotalCosto={setTotalCosto} totalVendido={totalVendido} totalCosto={totalCosto} onNavigate={setActiveTab} onGuardarVenta={guardarVenta} />
                 </TabsContent>
                 <TabsContent value="armado">
-                  <ArmadoTab stock={stock} setStock={setStock} armado={armado} setArmado={setArmado} margenGlobal={margenGlobal} setMargenGlobal={setMargenGlobal} setPcArmadas={setPcArmadas} onPcArmada={guardarPcArmada} />
+                  <ArmadoTab stock={stock} setStock={setStock} armado={armado} setArmado={setArmado} margenGlobal={margenGlobal} setMargenGlobal={setMargenGlobal} setPcArmadas={setPcArmadas} onPcArmada={guardarPcArmada} onRegistrarVenta={guardarVentaCompleta} />
                 </TabsContent>
                 <TabsContent value="calculadora"><CalculadoraTab /></TabsContent>
                 <TabsContent value="inventario">
@@ -247,6 +275,9 @@ export default function PanelOperativo() {
                 </TabsContent>
                 <TabsContent value="pagos">
                   <PagosTab />
+                </TabsContent>
+                <TabsContent value="ventas">
+                  <VentasTab onVentasChange={cargarMetricas} />
                 </TabsContent>
               </Tabs>
             </div>
