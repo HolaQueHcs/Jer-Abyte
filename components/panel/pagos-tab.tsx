@@ -403,7 +403,7 @@ export function PagosTab() {
                         )}
                       </div>
 
-                      {r.estado !== "Saldado" && (
+                      {/* Agregar pago — siempre visible */}
                         <div>
                           <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground mb-2">
                             {r.cuotas > 1 ? `Cuota ${r.pagos.length + 1} de ${r.cuotas}` : 'Registrar pago'}
@@ -420,11 +420,12 @@ export function PagosTab() {
                               <Plus className="h-3 w-3 mr-1" />Agregar
                             </Button>
                           </div>
-                          <Button size="sm" variant="outline" onClick={() => marcarSaldado(r)} className="h-7 text-xs mt-2 border-emerald-300 text-emerald-600 hover:bg-emerald-50">
-                            <CheckCircle className="h-3 w-3 mr-1" />Marcar como saldado
-                          </Button>
+                          {r.estado !== "Saldado" && (
+                            <Button size="sm" variant="outline" onClick={() => marcarSaldado(r)} className="h-7 text-xs mt-2 border-emerald-300 text-emerald-600 hover:bg-emerald-50">
+                              <CheckCircle className="h-3 w-3 mr-1" />Marcar como saldado
+                            </Button>
+                          )}
                         </div>
-                      )}
 
                       <button onClick={() => eliminarRegistro(r.id!)}
                         className={`text-[10px] transition-colors ${confirmDelete === r.id ? 'text-red-600 font-medium' : 'text-red-400 hover:text-red-600'}`}>
