@@ -49,6 +49,7 @@ export function PcsTab({ onVentaRegistrada }: PcsTabProps) {
   const [editCliente, setEditCliente] = useState("")
   const [editPrecio, setEditPrecio] = useState("")
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+  const [preguntarStock, setPreguntarStock] = useState<string | null>(null)
 
   useEffect(() => { cargar() }, [])
 
@@ -76,15 +77,31 @@ export function PcsTab({ onVentaRegistrada }: PcsTabProps) {
     await cargar()
   }
 
-  const eliminar = async (id: string) => {
-    if (confirmDelete === id) {
-      await supabase.from("pcs_armadas").delete().eq("id", id)
-      setConfirmDelete(null)
-      await cargar()
-    } else {
-      setConfirmDelete(id)
-      setTimeout(() => setConfirmDelete(c => c === id ? null : c), 3000)
+  const eliminar = async (id: string, devolverStock: boolean) => {
+    if (devolverStock) {
+      const pc = pcs.find(p => p.id === id)
+      if (pc && pc.componentes.length > 0) {
+        const { data: stockActual } = await supabase.from("stock").select("*")
+        if (stockActual) {
+          for (const comp of pc.componentes) {
+            if (comp.sidx !== undefined && comp.sidx !== null) {
+              const item = stockActual[comp.sidx]
+              if (item) {
+                await supabase.from("stock").update({ cantidad: item.cantidad + comp.qty, updated_at: new Date().toISOString() }).eq("id", item.id)
+              }
+            }
+          }
+        }
+      }
     }
+    await supabase.from("pcs_armadas").delete().eq("id", id)
+    setPreguntarStock(null)
+    setConfirmDelete(null)
+    await cargar()
+  }
+
+  const iniciarEliminar = (id: string) => {
+    setPreguntarStock(id)
   }
 
   const genPDFCliente = async (pc: PcArmada) => {
@@ -383,11 +400,29 @@ export function PcsTab({ onVentaRegistrada }: PcsTabProps) {
                         )}
                       </div>
 
-                      {/* Eliminar */}
-                      <button onClick={() => eliminar(pc.id)}
-                        className={`text-[10px] transition-colors ${confirmDelete === pc.id ? 'text-red-600 font-medium' : 'text-red-400 hover:text-red-600'}`}>
-                        {confirmDelete === pc.id ? '¿Confirmar? Clic de nuevo para eliminar' : 'Eliminar esta PC'}
-                      </button>
+                      {/* Eliminar con pregunta de stock */}
+                      {preguntarStock === pc.id ? (
+                        <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 rounded-xl p-3 space-y-2">
+                          <p className="text-xs font-medium text-red-700">¿Devolver componentes al inventario?</p>
+                          <p className="text-[10px] text-red-500">Si los componentes fueron usados en esta PC y querés volver a tenerlos en stock, seleccioná "Sí".</p>
+                          <div className="flex gap-2">
+                            <Button size="sm" onClick={() => eliminar(pc.id, true)} className="h-7 text-xs bg-blue-600 hover:bg-blue-700">
+                              Sí, devolver stock
+                            </Button>
+                            <Button size="sm" onClick={() => eliminar(pc.id, false)} variant="outline" className="h-7 text-xs border-red-300 text-red-600 hover:bg-red-50">
+                              No, solo eliminar
+                            </Button>
+                            <Button size="sm" onClick={() => setPreguntarStock(null)} variant="ghost" className="h-7 text-xs">
+                              Cancelar
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button onClick={() => iniciarEliminar(pc.id)}
+                          className="text-[10px] text-red-400 hover:text-red-600 transition-colors">
+                          Eliminar esta PC
+                        </button>
+                      )}
                     </div>
                   )}
                 </CardContent>
