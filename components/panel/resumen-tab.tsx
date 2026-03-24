@@ -175,7 +175,7 @@ export function ResumenTab({
             ) : (
               pcsArmadas.map(pc => (
                 <Card key={pc.id} className={`border-0 ${pc.estado === 'Vendida' ? 'bg-emerald-50/50' : 'bg-card/80'}`}>
-                  <CardContent className="p-3">
+                  <CardContent className="p-3 space-y-2">
                     {editando === pc.id ? (
                       <div className="space-y-2">
                         <Input value={editNombre} onChange={e => setEditNombre(e.target.value)} placeholder="Nombre de la PC" className="h-7 text-xs" />
@@ -215,16 +215,16 @@ export function ResumenTab({
                           </div>
                         </div>
                       </div>
-                      {preguntarStock === pc.id && (
-                        <div className="mt-2 bg-red-50 dark:bg-red-950/20 border border-red-200 rounded-xl p-3 space-y-2">
-                          <p className="text-xs font-medium text-red-700">¿Devolver componentes al inventario?</p>
-                          <div className="flex gap-2 flex-wrap">
-                            <Button size="sm" onClick={() => eliminarPC(pc.id, true)} className="h-7 text-xs bg-blue-600 hover:bg-blue-700">Sí, devolver stock</Button>
-                            <Button size="sm" onClick={() => eliminarPC(pc.id, false)} variant="outline" className="h-7 text-xs border-red-300 text-red-600 hover:bg-red-50">No, solo eliminar</Button>
-                            <Button size="sm" onClick={() => setPreguntarStock(null)} variant="ghost" className="h-7 text-xs">Cancelar</Button>
-                          </div>
+                    )}
+                    {preguntarStock === pc.id && (
+                      <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 rounded-xl p-3 space-y-2">
+                        <p className="text-xs font-medium text-red-700">¿Devolver componentes al inventario?</p>
+                        <div className="flex gap-2 flex-wrap">
+                          <Button size="sm" onClick={() => eliminarPC(pc.id, true)} className="h-7 text-xs bg-blue-600 hover:bg-blue-700">Sí, devolver stock</Button>
+                          <Button size="sm" onClick={() => eliminarPC(pc.id, false)} variant="outline" className="h-7 text-xs border-red-300 text-red-600 hover:bg-red-50">No, solo eliminar</Button>
+                          <Button size="sm" onClick={() => setPreguntarStock(null)} variant="ghost" className="h-7 text-xs">Cancelar</Button>
                         </div>
-                      )}
+                      </div>
                     )}
                   </CardContent>
                 </Card>
