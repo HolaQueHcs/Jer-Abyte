@@ -52,6 +52,7 @@ export function ResumenTab({
   const [editCliente, setEditCliente] = useState("")
   const [editPrecio, setEditPrecio] = useState("")
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+  const [preguntarStock, setPreguntarStock] = useState<string | null>(null)
 
   useEffect(() => { cargarPCs() }, [])
 
@@ -95,15 +96,26 @@ export function ResumenTab({
     await cargarPCs()
   }
 
-  const eliminarPC = async (id: string) => {
-    if (confirmDelete === id) {
-      await supabase.from("pcs_armadas").delete().eq("id", id)
-      setConfirmDelete(null)
-      await cargarPCs()
-    } else {
-      setConfirmDelete(id)
-      setTimeout(() => setConfirmDelete(c => c === id ? null : c), 3000)
+  const eliminarPC = async (id: string, devolverStock: boolean) => {
+    if (devolverStock) {
+      const { data: pcData } = await supabase.from("pcs_armadas").select("componentes").eq("id", id).single()
+      if (pcData?.componentes?.length > 0) {
+        const { data: stockActual } = await supabase.from("stock").select("*")
+        if (stockActual) {
+          for (const comp of pcData.componentes) {
+            if (comp.sidx !== undefined && comp.sidx !== null) {
+              const item = stockActual[comp.sidx]
+              if (item) {
+                await supabase.from("stock").update({ cantidad: item.cantidad + comp.qty, updated_at: new Date().toISOString() }).eq("id", item.id)
+              }
+            }
+          }
+        }
+      }
     }
+    await supabase.from("pcs_armadas").delete().eq("id", id)
+    setPreguntarStock(null)
+    await cargarPCs()
   }
 
   const enStock = pcsArmadas.filter(p => p.estado === "En stock").length
@@ -198,13 +210,21 @@ export function ResumenTab({
                           <div className="flex gap-1">
                             <button onClick={() => { setEditando(pc.id); setEditNombre(pc.nombre); setEditCliente(pc.cliente); setEditPrecio(String(pc.precio_venta)) }}
                               className="text-[10px] text-blue-400 hover:text-blue-600">✏️</button>
-                            <button onClick={() => eliminarPC(pc.id)}
-                              className={`text-[10px] transition-colors ${confirmDelete === pc.id ? 'text-red-600 font-medium' : 'text-red-400 hover:text-red-600'}`}>
-                              {confirmDelete === pc.id ? '¿Confirmar?' : '🗑️'}
-                            </button>
+                            <button onClick={() => setPreguntarStock(pc.id)}
+                              className="text-[10px] text-red-400 hover:text-red-600">🗑️</button>
                           </div>
                         </div>
                       </div>
+                      {preguntarStock === pc.id && (
+                        <div className="mt-2 bg-red-50 dark:bg-red-950/20 border border-red-200 rounded-xl p-3 space-y-2">
+                          <p className="text-xs font-medium text-red-700">¿Devolver componentes al inventario?</p>
+                          <div className="flex gap-2 flex-wrap">
+                            <Button size="sm" onClick={() => eliminarPC(pc.id, true)} className="h-7 text-xs bg-blue-600 hover:bg-blue-700">Sí, devolver stock</Button>
+                            <Button size="sm" onClick={() => eliminarPC(pc.id, false)} variant="outline" className="h-7 text-xs border-red-300 text-red-600 hover:bg-red-50">No, solo eliminar</Button>
+                            <Button size="sm" onClick={() => setPreguntarStock(null)} variant="ghost" className="h-7 text-xs">Cancelar</Button>
+                          </div>
+                        </div>
+                      )}
                     )}
                   </CardContent>
                 </Card>
