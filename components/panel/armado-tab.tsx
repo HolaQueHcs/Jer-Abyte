@@ -15,6 +15,7 @@ const fmt = (n: number) => '$' + Math.round(n).toLocaleString('es-AR')
 const MARCA = "Jer Abyte"
 const LEMA = "La PC que cumple con tus exigencias diarias — vas a tener nuestra confianza y lealtad ante cualquier dificultad."
 const GARANTIA = 6
+const WHATSAPP = "351 227-2839"
 const REND_DESC: Record<string, string> = {
   "Basico": "Ideal para navegacion web, redes sociales, documentos y uso cotidiano sin exigencia grafica.",
   "Intermedio": "Permite multitarea fluida, juegos en 1080p a framerate estable y edicion de fotos sin problemas.",
@@ -80,19 +81,19 @@ export function ArmadoTab({ stock, setStock, armado, setArmado, margenGlobal, se
   const precioVenta = (costo: number) => Math.round(costo * (1 + margenGlobal / 100))
 
   const totalCosto = armado.reduce((sum, a) => sum + (a.pcosto * a.qty), 0)
-  const totalVentaBase = armado.reduce((sum, a) => sum + (a.pventa * a.qty), 0)
+  // Suma real de los pventa editados individualmente
+  const totalVentaReal = armado.reduce((sum, a) => sum + (a.pventa * a.qty), 0)
 
-  // Precio final: usa el manual si fue editado, sino el calculado con margen
-  const precioFinalNum = precioFinalManual !== "" ? (parseFloat(precioFinalManual) || 0) : totalVentaBase
+  // Si hay precio manual, usarlo. Si no, usar la suma real de pventa editados
+  const precioFinalNum = precioFinalManual !== "" ? (parseFloat(precioFinalManual) || 0) : totalVentaReal
   const totalVenta = precioFinalNum
   const ganancia = totalVenta - totalCosto
   const margenReal = totalCosto > 0 ? Math.round((ganancia / totalCosto) * 100) : 0
   const enRojo = ganancia < 0
-
-  // Precio recomendado con margen actual
   const precioRecomendado = Math.round(totalCosto * (1 + margenGlobal / 100))
 
-  // Distribuir precio final proporcionalmente entre componentes
+  // Si hay precio manual → distribuye proporcionalmente
+  // Si no → respeta los pventa editados individualmente
   const armadoConPrecioDistribuido = () => {
     if (precioFinalManual === "" || totalCosto === 0) return armado
     const factor = precioFinalNum / totalCosto
@@ -167,14 +168,16 @@ export function ArmadoTab({ stock, setStock, armado, setArmado, margenGlobal, se
       setMensaje({ tipo: 'error', texto: 'Agrega componentes primero.' })
       return
     }
+    // Solo descontar stock de componentes reales (no de referencia)
     const newStock = stock.map((s, idx) => {
-      const usado = armado.filter(a => a.sidx === idx).reduce((t, a) => t + a.qty, 0)
+      if (s.tipo === 'referencia') return s
+      const usado = armado.filter(a => a.sidx === idx && !a.ext).reduce((t, a) => t + a.qty, 0)
       return usado > 0 ? { ...s, qty: s.qty - usado } : s
     })
     await setStock(newStock)
     setPcArmadas(p => p + 1)
     if (onPcArmada) await onPcArmada(precioFinalNum, pcCliente.trim(), pcNombre.trim(), armado, totalCosto)
-    setMensaje({ tipo: 'success', texto: 'Stock descontado. PC registrada y traspasada a Pagos.' })
+    setMensaje({ tipo: 'success', texto: 'Stock descontado. PC registrada.' })
   }
 
   const updatePrecio = (index: number, field: 'pcosto' | 'pventa', value: number) => {
@@ -304,8 +307,11 @@ export function ArmadoTab({ stock, setStock, armado, setArmado, margenGlobal, se
       doc.setPage(p)
       doc.setFillColor(15, 40, 80); doc.rect(0, 285, W, 12, 'F')
       doc.setTextColor(180, 210, 255); doc.setFontSize(7.5); doc.setFont('helvetica', 'italic')
-      doc.text(LEMA, W / 2, 292, { align: 'center' })
-      doc.setFont('helvetica', 'normal'); doc.text('Pag ' + p + ' de ' + np, W - mg, 292, { align: 'right' })
+      doc.text(LEMA, W / 2, 290, { align: 'center' })
+      doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255)
+      doc.text('WhatsApp: ' + WHATSAPP, mg, 295)
+      doc.setFont('helvetica', 'normal'); doc.setTextColor(180, 210, 255)
+      doc.text('Pag ' + p + ' de ' + np, W - mg, 295, { align: 'right' })
     }
     doc.save(`JerAbyte_Cliente_${nom.replace(/[^a-z0-9]/gi, '_')}.pdf`)
     setMensaje({ tipo: 'success', texto: 'PDF para el cliente generado.' })
