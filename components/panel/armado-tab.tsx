@@ -92,12 +92,12 @@ export function ArmadoTab({ stock, setStock, armado, setArmado, margenGlobal, se
   const enRojo = ganancia < 0
   const precioRecomendado = Math.round(totalCosto * (1 + margenGlobal / 100))
 
-  // Si hay precio manual → distribuye proporcionalmente
+  // Si hay precio manual → distribuye proporcionalmente por pventa actual
   // Si no → respeta los pventa editados individualmente
   const armadoConPrecioDistribuido = () => {
-    if (precioFinalManual === "" || totalCosto === 0) return armado
-    const factor = precioFinalNum / totalCosto
-    return armado.map(a => ({ ...a, pventa: Math.round(a.pcosto * factor) }))
+    if (precioFinalManual === "" || totalVentaReal === 0) return armado
+    const factor = precioFinalNum / totalVentaReal
+    return armado.map(a => ({ ...a, pventa: Math.round(a.pventa * factor) }))
   }
 
   const aplicarMargen = () => {
@@ -629,13 +629,13 @@ export function ArmadoTab({ stock, setStock, armado, setArmado, margenGlobal, se
                     <div className="text-center text-xs">{a.qty}</div>
                     <Input
                       type="number"
-                      value={a.pcosto}
+                      value={a.pcosto || ""}
                       onChange={e => updatePrecio(i, 'pcosto', parseFloat(e.target.value) || 0)}
                       className="h-7 text-xs text-right bg-red-50 border-red-200"
                     />
                     <Input
                       type="number"
-                      value={a.pventa}
+                      value={a.pventa || ""}
                       onChange={e => updatePrecio(i, 'pventa', parseFloat(e.target.value) || 0)}
                       className="h-7 text-xs text-right bg-emerald-50 border-emerald-200"
                     />
