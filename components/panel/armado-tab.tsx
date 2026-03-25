@@ -689,7 +689,7 @@ export function ArmadoTab({ stock, setStock, armado, setArmado, margenGlobal, se
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-muted-foreground">$</span>
                 <input
                   type="number"
-                  value={precioFinalManual !== "" ? precioFinalManual : precioRecomendado}
+                  value={precioFinalManual}
                   onChange={e => setPrecioFinalManual(e.target.value)}
                   className={`w-full h-10 pl-7 pr-3 text-base font-semibold border-2 rounded-xl bg-background transition-colors ${enRojo ? 'border-red-400 text-red-600' : 'border-emerald-400 text-emerald-600'}`}
                   placeholder={String(precioRecomendado)}
