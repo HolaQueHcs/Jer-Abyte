@@ -710,7 +710,6 @@ export function ArmadoTab({ stock, setStock, armado, setArmado, margenGlobal, se
                 onClick={() => {
                   const dist = armadoConPrecioDistribuido()
                   setArmado(dist)
-                  setPrecioFinalManual("")
                 }}
                 title="Distribuye el precio final proporcionalmente entre todos los componentes"
               >
