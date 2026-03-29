@@ -12,6 +12,7 @@ import { ChecklistTab } from "@/components/panel/checklist-tab"
 import { CatalogoTab } from "@/components/panel/catalogo-tab"
 import { ChecklistSidebar } from "@/components/panel/checklist-sidebar"
 import { AgendaSidebar } from "@/components/panel/agenda-sidebar"
+import { NotasSidebar } from "@/components/panel/notas-sidebar"
 import { PagosTab } from "@/components/panel/pagos-tab"
 import { PcsTab } from "@/components/panel/pcs-tab"
 import { DecorativeBackground } from "@/components/decorative-background"
@@ -73,6 +74,8 @@ export default function PanelOperativo() {
   const [loadingStock, setLoadingStock] = useState(true)
   const [armado, setArmado] = useState<ArmadoItem[]>([])
   const [checklist, setChecklist] = useState<ChecklistItem[]>(initialChecklist)
+  const [notasFlotante, setNotasFlotante] = useState(false)
+  const [notasFijo, setNotasFijo] = useState(false)
   const [ventas, setVentas] = useState(0)
   const [gananciaTotal, setGananciaTotal] = useState(0)
   const [pcArmadas, setPcArmadas] = useState(0)
@@ -309,11 +312,42 @@ export default function PanelOperativo() {
               </Tabs>
             </div>
 
-            <div className="hidden xl:flex flex-col w-72 flex-shrink-0">
-              <div className="sticky top-5 bg-card/80 backdrop-blur-sm border border-border rounded-2xl p-4 h-[calc(100vh-120px)] overflow-hidden">
-                <AgendaSidebar />
+            <div className="hidden xl:flex flex-col w-72 flex-shrink-0 gap-3">
+              <div className="sticky top-5 flex flex-col gap-3 h-[calc(100vh-120px)]">
+                {/* Agenda — mitad superior */}
+                <div className="bg-card/80 backdrop-blur-sm border border-border rounded-2xl p-4 flex-1 overflow-hidden">
+                  <AgendaSidebar />
+                </div>
+                {/* Cuaderno — mitad inferior, o flotante */}
+                {!notasFlotante && (
+                  <div className="bg-card/80 backdrop-blur-sm border border-violet-200 rounded-2xl p-4 flex-1 overflow-hidden">
+                    <NotasSidebar
+                      fijo={notasFijo}
+                      onToggleFijo={() => setNotasFijo(f => !f)}
+                      onToggleFlotante={() => setNotasFlotante(true)}
+                    />
+                  </div>
+                )}
               </div>
             </div>
+
+            {/* Cuaderno flotante */}
+            {notasFlotante && (
+              <div className="fixed bottom-6 right-6 z-50 w-80 bg-card/95 backdrop-blur-md border border-violet-200 rounded-2xl shadow-2xl p-4 h-[480px] flex flex-col">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-semibold text-violet-600">📒 Cuaderno flotante</span>
+                  <button
+                    onClick={() => setNotasFlotante(false)}
+                    className="text-xs text-muted-foreground hover:text-foreground px-2 py-0.5 rounded hover:bg-muted transition-all"
+                  >
+                    Fijar al panel
+                  </button>
+                </div>
+                <div className="flex-1 overflow-hidden">
+                  <NotasSidebar />
+                </div>
+              </div>
+            )}
 
           </div>
         </div>
