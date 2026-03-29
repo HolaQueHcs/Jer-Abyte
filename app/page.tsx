@@ -164,7 +164,7 @@ export default function PanelOperativo() {
     } else {
       await supabase.from("metricas").insert({ fecha: hoy, ventas_total: 0, ganancia_total: 0, pc_armadas: 1 })
     }
-    // Guardar PC armada con todos sus componentes
+    // Guardar PC armada
     const margen = costoTotal > 0 ? Math.round(((precioFinal - costoTotal) / costoTotal) * 100) : 0
     await supabase.from("pcs_armadas").insert({
       nombre: nombrePc || "PC sin nombre",
@@ -175,6 +175,32 @@ export default function PanelOperativo() {
       margen,
       estado: "En stock"
     })
+    // Crear registro en pagos_parciales
+    if (precioFinal > 0) {
+      const { data: pagoData } = await supabase.from("pagos_parciales").insert({
+        cliente: cliente || "Sin nombre",
+        descripcion: nombrePc || "PC armada",
+        total: precioFinal,
+        pagado: 0,
+        pagos: [],
+        estado: "Pendiente",
+        cuotas: 1
+      }).select().single()
+
+      // Insertar en ventas con monto 0 (se irá sumando con cada pago)
+      // y vincularlo con pagos_parciales para actualizarlo después
+      if (pagoData) {
+        await supabase.from("ventas").insert({
+          monto: 0,
+          costo: costoTotal,
+          ganancia: -costoTotal,
+          descripcion: nombrePc || "PC armada",
+          pagos_parciales_id: pagoData.id
+        })
+      }
+    }
+    // Suma 1 a PCs vendidas aunque no esté saldada
+    setVentas((v: number) => v + 1)
     await cargarMetricas()
   }
 
