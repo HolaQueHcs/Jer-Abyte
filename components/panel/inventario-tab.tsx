@@ -181,7 +181,19 @@ export function InventarioTab({ stock, setStock, loading = false }: InventarioTa
                             <div className="flex items-center gap-3">
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 flex-wrap mb-1">
-                                  <span className="text-xs font-medium">{item.nombre}</span>
+                                  <input
+                                    type="text"
+                                    defaultValue={item.nombre}
+                                    onBlur={async (e) => {
+                                      const nuevo = e.target.value.trim()
+                                      if (nuevo && nuevo !== item.nombre) {
+                                        const newItems = [...stock]
+                                        newItems[index] = { ...newItems[index], nombre: nuevo }
+                                        await setStock(newItems)
+                                      }
+                                    }}
+                                    className="text-xs font-medium bg-transparent border-b border-transparent hover:border-border focus:border-blue-400 focus:outline-none px-0.5 min-w-[100px]"
+                                  />
                                   {esRef && <Badge className="text-[8px] px-1.5 py-0 bg-amber-100 text-amber-700 border-amber-300">Ref.</Badge>}
                                   {!esRef && estado === 'bajo' && <Badge variant="destructive" className="text-[8px] px-1.5 py-0">Stock bajo</Badge>}
                                   {!esRef && estado === 'moderado' && <Badge className="text-[8px] px-1.5 py-0 bg-amber-100 text-amber-700 border-amber-300">Moderado</Badge>}
