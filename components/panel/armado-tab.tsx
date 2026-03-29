@@ -104,9 +104,9 @@ export function ArmadoTab({ stock, setStock, armado, setArmado, margenGlobal, se
     setArmado(armado.map(a => ({ ...a, pventa: Math.round(a.pcosto * (1 + margenGlobal / 100)) })))
   }
 
-  // Stock disponible filtrado por categorías del slot
+  // Stock disponible filtrado por categorías del slot — incluye qty 0 para presupuestos
   const stockParaSlot = (slot: typeof SLOTS[0]) =>
-    stock.filter(s => slot.cat.includes(s.cat) && s.qty > 0)
+    stock.filter(s => slot.cat.includes(s.cat))
 
   const agregarDesdeSlot = (slot: typeof SLOTS[0]) => {
     const idx = parseInt(slotSelected[slot.id] || "")
@@ -117,11 +117,14 @@ export function ArmadoTab({ stock, setStock, armado, setArmado, margenGlobal, se
     }
     const s = stock[idx]
     const yaUsado = armado.filter(a => a.sidx === idx).reduce((sum, a) => sum + a.qty, 0)
-    if (yaUsado + qty > s.qty) {
-      setSlotAviso({ ...slotAviso, [slot.id]: `Stock insuficiente. Disponible: ${s.qty - yaUsado}` })
-      return
+    // Avisar si no hay stock pero permitir agregar igual (para presupuestos)
+    if (s.qty === 0) {
+      setSlotAviso({ ...slotAviso, [slot.id]: `⚠️ Sin stock — solo para presupuesto` })
+    } else if (yaUsado + qty > s.qty) {
+      setSlotAviso({ ...slotAviso, [slot.id]: `⚠️ Stock insuficiente. Disponible: ${s.qty - yaUsado}` })
+    } else {
+      setSlotAviso({ ...slotAviso, [slot.id]: "" })
     }
-    setSlotAviso({ ...slotAviso, [slot.id]: "" })
     setArmado([...armado, {
       nombre: s.nombre,
       cat: s.cat,
@@ -168,11 +171,11 @@ export function ArmadoTab({ stock, setStock, armado, setArmado, margenGlobal, se
       setMensaje({ tipo: 'error', texto: 'Agrega componentes primero.' })
       return
     }
-    // Solo descontar stock de componentes reales (no de referencia)
+    // Descontar stock — solo si tienen qty suficiente (qty 0 = presupuesto, no descontar)
     const newStock = stock.map((s, idx) => {
-      if (s.tipo === 'referencia') return s
+      if (s.qty === 0) return s // componente sin stock, solo para presupuesto
       const usado = armado.filter(a => a.sidx === idx && !a.ext).reduce((t, a) => t + a.qty, 0)
-      return usado > 0 ? { ...s, qty: s.qty - usado } : s
+      return usado > 0 ? { ...s, qty: Math.max(0, s.qty - usado) } : s
     })
     await setStock(newStock)
     setPcArmadas(p => p + 1)
@@ -553,7 +556,7 @@ export function ArmadoTab({ stock, setStock, armado, setArmado, margenGlobal, se
                               <SelectContent>
                                 {disponibles.map(s => {
                                   const idx = stock.indexOf(s)
-                                  return <SelectItem key={idx} value={String(idx)}>{s.nombre} ({s.qty}) — {fmt(s.precio)}</SelectItem>
+                                  return <SelectItem key={idx} value={String(idx)}>{s.qty === 0 ? '⚠️ ' : ''}{s.nombre} ({s.qty === 0 ? 'Sin stock' : s.qty}) — {fmt(s.precio)}</SelectItem>
                                 })}
                               </SelectContent>
                             </Select>
