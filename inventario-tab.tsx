@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Minus, Trash2 } from "lucide-react"
+import { Plus, Minus, Trash2, Camera, X, Check, Search, Upload } from "lucide-react"
+import { createClient } from "@/lib/supabase/client"
 import type { StockItem } from "@/app/page"
 
 const fmt = (n: number) => '$' + Math.round(n).toLocaleString('es-AR')
@@ -26,8 +27,95 @@ export function InventarioTab({ stock, setStock, loading = false }: InventarioTa
   const [cantidad, setCantidad] = useState("")
   const [minimo, setMinimo] = useState("2")
   const [nota, setNota] = useState("")
+  const [tipo, setTipo] = useState<'real' | 'referencia'>('real')
+  const supabase = createClient()
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null)
   const [guardando, setGuardando] = useState(false)
+  const [filtro, setFiltro] = useState<'todos' | 'real' | 'referencia'>('todos')
+  // Estados para manejo de fotos
+  const [fotoModal, setFotoModal] = useState<number | null>(null) // índice del item con modal abierto
+  const [buscandoFoto, setBuscandoFoto] = useState(false)
+  const [previews, setPreviews] = useState<string[]>([]) // URLs de preview de búsqueda
+  const [fotoSeleccionada, setFotoSeleccionada] = useState<string>("")
+  const [subiendoFoto, setSubiendoFoto] = useState(false)
+
+  const buscarFotoAuto = async (nombre: string) => {
+    setBuscandoFoto(true)
+    setPreviews([])
+    setFotoSeleccionada("")
+    try {
+      // Usamos DuckDuckGo Instant Answer API (gratuita, sin API key)
+      const query = encodeURIComponent(nombre + " component hardware")
+      const res = await fetch(`https://api.duckduckgo.com/?q=${query}&format=json&no_html=1&skip_disambig=1`)
+      const data = await res.json()
+      const urls: string[] = []
+      // Imagen principal
+      if (data.Image && data.Image.startsWith("http")) urls.push(data.Image)
+      // Resultados relacionados
+      if (data.RelatedTopics) {
+        data.RelatedTopics.slice(0, 5).forEach((t: any) => {
+          if (t.Icon?.URL && t.Icon.URL.startsWith("http")) urls.push(t.Icon.URL)
+        })
+      }
+      // Fallback: construir URL de búsqueda de imagen pública de Google (thumbnail)
+      if (urls.length === 0) {
+        // Usar logos de fabricantes conocidos como fallback
+        const marcas: Record<string, string> = {
+          "msi": "https://logo.clearbit.com/msi.com",
+          "gigabyte": "https://logo.clearbit.com/gigabyte.com",
+          "asus": "https://logo.clearbit.com/asus.com",
+          "amd": "https://logo.clearbit.com/amd.com",
+          "intel": "https://logo.clearbit.com/intel.com",
+          "nvidia": "https://logo.clearbit.com/nvidia.com",
+          "corsair": "https://logo.clearbit.com/corsair.com",
+          "kingston": "https://logo.clearbit.com/kingston.com",
+          "seagate": "https://logo.clearbit.com/seagate.com",
+          "western digital": "https://logo.clearbit.com/westerndigital.com",
+          "samsung": "https://logo.clearbit.com/samsung.com",
+        }
+        const nombreLower = nombre.toLowerCase()
+        for (const [marca, url] of Object.entries(marcas)) {
+          if (nombreLower.includes(marca)) { urls.push(url); break }
+        }
+      }
+      setPreviews(urls.slice(0, 6))
+    } catch {
+      setPreviews([])
+    }
+    setBuscandoFoto(false)
+  }
+
+  const guardarFoto = async (index: number, url: string) => {
+    if (!url) return
+    setSubiendoFoto(true)
+    const newItems = [...stock]
+    newItems[index] = { ...newItems[index], foto_url: url }
+    await setStock(newItems)
+    setFotoModal(null)
+    setFotoSeleccionada("")
+    setPreviews([])
+    setSubiendoFoto(false)
+  }
+
+  const subirFotoManual = async (index: number, file: File) => {
+    setSubiendoFoto(true)
+    try {
+      const ext = file.name.split('.').pop()
+      const path = `componente-${Date.now()}.${ext}`
+      const { data, error } = await supabase.storage.from('componentes-fotos').upload(path, file, { upsert: true })
+      if (!error && data) {
+        const { data: urlData } = supabase.storage.from('componentes-fotos').getPublicUrl(path)
+        await guardarFoto(index, urlData.publicUrl)
+      }
+    } catch {}
+    setSubiendoFoto(false)
+  }
+
+  const eliminarFoto = async (index: number) => {
+    const newItems = [...stock]
+    newItems[index] = { ...newItems[index], foto_url: "" }
+    await setStock(newItems)
+  }
 
   const agregarComponente = async () => {
     if (!nombre.trim()) return
@@ -36,15 +124,18 @@ export function InventarioTab({ stock, setStock, loading = false }: InventarioTa
       nombre: nombre.trim(),
       cat: categoria,
       precio: parseFloat(precio) || 0,
-      qty: parseInt(cantidad) || 0,
-      min: parseInt(minimo) || 1,
-      nota: nota.trim()
+      qty: tipo === 'referencia' ? 0 : (parseInt(cantidad) || 0),
+      min: tipo === 'referencia' ? 0 : (parseInt(minimo) || 1),
+      nota: nota.trim(),
+      tipo
     }])
     setNombre(""); setPrecio(""); setCantidad(""); setMinimo("2"); setNota("")
     setGuardando(false)
   }
 
   const cambiarStock = async (index: number, delta: number) => {
+    const item = stock[index]
+    if (item.tipo === 'referencia') return
     const newItems = [...stock]
     newItems[index] = { ...newItems[index], qty: Math.max(0, newItems[index].qty + delta) }
     await setStock(newItems)
@@ -62,7 +153,10 @@ export function InventarioTab({ stock, setStock, loading = false }: InventarioTa
     }
   }
 
-  const categoriasConItems = [...new Set(stock.map(s => s.cat))]
+  const stockFiltrado = filtro === 'todos' ? stock : stock.filter(s => s.tipo === filtro)
+  const categoriasConItems = [...new Set(stockFiltrado.map(s => s.cat))]
+  const cantRef = stock.filter(s => s.tipo === 'referencia').length
+  const cantReal = stock.filter(s => s.tipo !== 'referencia').length
 
   return (
     <div className="space-y-5">
@@ -71,6 +165,20 @@ export function InventarioTab({ stock, setStock, loading = false }: InventarioTa
         <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground mb-2">Agregar componente</p>
         <Card className="border-0 bg-card/80">
           <CardContent className="p-4 space-y-3">
+            {/* Tipo */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => setTipo('real')}
+                className={`flex-1 py-2 rounded-xl text-xs font-medium border-2 transition-colors ${tipo === 'real' ? 'bg-emerald-500 text-white border-emerald-500' : 'border-border text-muted-foreground hover:border-emerald-400'}`}>
+                🟢 Real — tengo en stock
+              </button>
+              <button
+                onClick={() => setTipo('referencia')}
+                className={`flex-1 py-2 rounded-xl text-xs font-medium border-2 transition-colors ${tipo === 'referencia' ? 'bg-amber-500 text-white border-amber-500' : 'border-border text-muted-foreground hover:border-amber-400'}`}>
+                🟡 Referencia — para presupuestos
+              </button>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <label className="text-[10px] text-muted-foreground">Nombre</label>
@@ -91,20 +199,23 @@ export function InventarioTab({ stock, setStock, loading = false }: InventarioTa
                 <label className="text-[10px] text-muted-foreground">Precio de costo ($)</label>
                 <Input type="number" placeholder="ej: 180000" value={precio} onChange={(e) => setPrecio(e.target.value)} className="h-8 text-sm" />
               </div>
+              {tipo === 'real' && (
+                <div className="space-y-1">
+                  <label className="text-[10px] text-muted-foreground">Cantidad en stock</label>
+                  <Input type="number" placeholder="ej: 3" value={cantidad} onChange={(e) => setCantidad(e.target.value)} className="h-8 text-sm" />
+                </div>
+              )}
+            </div>
+            {tipo === 'real' && (
               <div className="space-y-1">
-                <label className="text-[10px] text-muted-foreground">Cantidad en stock</label>
-                <Input type="number" placeholder="ej: 3 — poné 0 si no tenés" value={cantidad} onChange={(e) => setCantidad(e.target.value)} className="h-8 text-sm" />
+                <label className="text-[10px] text-muted-foreground">Stock minimo para alerta</label>
+                <Input type="number" value={minimo} onChange={(e) => setMinimo(e.target.value)} className="h-8 text-sm w-24" />
               </div>
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] text-muted-foreground">Stock mínimo para alerta</label>
-              <Input type="number" value={minimo} onChange={(e) => setMinimo(e.target.value)} className="h-8 text-sm w-24" />
-            </div>
+            )}
             <div className="space-y-1">
               <label className="text-[10px] text-muted-foreground">📝 Nota privada (ej: dónde comprarlo)</label>
               <Input placeholder="ej: MercadoLibre — vendedor TechStore" value={nota} onChange={(e) => setNota(e.target.value)} className="h-8 text-sm" />
             </div>
-            <p className="text-[10px] text-muted-foreground">💡 Si ponés cantidad 0 igual aparece en el Armado de PC para presupuestos, con una advertencia de sin stock.</p>
             <Button size="sm" onClick={agregarComponente} disabled={guardando} className="h-8 text-xs">
               <Plus className="h-3 w-3 mr-1" />{guardando ? "Guardando..." : "Agregar al inventario"}
             </Button>
@@ -114,44 +225,68 @@ export function InventarioTab({ stock, setStock, loading = false }: InventarioTa
 
       {/* Inventario actual */}
       <div>
-        <div className="flex items-center justify-between mb-2">
-          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Inventario actual</p>
+        <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            Inventario — {cantReal} reales · {cantRef} de referencia
+          </p>
           {guardando && <span className="text-[10px] text-blue-500 animate-pulse">Guardando...</span>}
+        </div>
+
+        {/* Filtros */}
+        <div className="flex gap-1 mb-3">
+          {(['todos', 'real', 'referencia'] as const).map(f => (
+            <button key={f} onClick={() => setFiltro(f)}
+              className={`text-[11px] px-2.5 py-1 rounded-full border transition-colors ${filtro === f ? 'bg-blue-600 text-white border-blue-600' : 'border-border text-muted-foreground hover:border-blue-400'}`}>
+              {f === 'todos' ? 'Todos' : f === 'real' ? '🟢 Reales' : '🟡 Referencia'}
+            </button>
+          ))}
         </div>
 
         {loading ? (
           <div className="text-center py-8 text-xs text-muted-foreground animate-pulse">Cargando inventario...</div>
-        ) : stock.length === 0 ? (
-          <div className="text-center py-8 text-xs text-muted-foreground">Sin componentes en el inventario.</div>
+        ) : stockFiltrado.length === 0 ? (
+          <div className="text-center py-8 text-xs text-muted-foreground">Sin componentes.</div>
         ) : (
           <div className="space-y-4">
             {categoriasConItems.map(cat => {
-              const items = stock.filter(s => s.cat === cat)
+              const items = stockFiltrado.filter(s => s.cat === cat)
               return (
                 <div key={cat}>
                   <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground mb-2">{cat}</p>
                   <div className="space-y-2">
                     {items.map(item => {
                       const index = stock.indexOf(item)
-                      const sinStock = item.qty === 0
-                      const nivel = sinStock ? 0 : Math.min(100, Math.round((item.qty / (item.min * 3)) * 100))
-                      const estado = sinStock ? 'sin' : item.qty <= item.min ? 'bajo' : item.qty <= item.min * 1.5 ? 'moderado' : 'ok'
-                      const color = estado === 'sin' ? '#94a3b8' : estado === 'bajo' ? '#ef4444' : estado === 'moderado' ? '#f59e0b' : '#10b981'
+                      const esRef = item.tipo === 'referencia'
+                      const nivel = esRef ? 0 : Math.min(100, Math.round((item.qty / (item.min * 3)) * 100))
+                      const estado = esRef ? 'ref' : item.qty <= item.min ? 'bajo' : item.qty <= item.min * 1.5 ? 'moderado' : 'ok'
+                      const color = estado === 'bajo' ? '#ef4444' : estado === 'moderado' ? '#f59e0b' : estado === 'ref' ? '#f59e0b' : '#10b981'
                       const isConfirming = confirmDelete === index
                       return (
-                        <Card key={index} className={`border-0 ${sinStock ? 'bg-slate-50/50 dark:bg-slate-900/20' : 'bg-card/80'}`}>
+                        <Card key={index} className={`border-0 ${esRef ? 'bg-amber-50/50 dark:bg-amber-950/10 border border-amber-200/50' : 'bg-card/80'}`}>
                           <CardContent className="p-3">
                             <div className="flex items-center gap-3">
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 flex-wrap mb-1">
-                                  <span className="text-xs font-medium">{item.nombre}</span>
-                                  {sinStock && <Badge className="text-[8px] px-1.5 py-0 bg-slate-100 text-slate-500 border-slate-300">Sin stock</Badge>}
-                                  {!sinStock && estado === 'bajo' && <Badge variant="destructive" className="text-[8px] px-1.5 py-0">Stock bajo</Badge>}
-                                  {!sinStock && estado === 'moderado' && <Badge className="text-[8px] px-1.5 py-0 bg-amber-100 text-amber-700 border-amber-300">Moderado</Badge>}
-                                  {!sinStock && estado === 'ok' && <Badge className="text-[8px] px-1.5 py-0 bg-emerald-100 text-emerald-700 border-emerald-300">OK</Badge>}
+                                  <input
+                                    type="text"
+                                    defaultValue={item.nombre}
+                                    onBlur={async (e) => {
+                                      const nuevo = e.target.value.trim()
+                                      if (nuevo && nuevo !== item.nombre) {
+                                        const newItems = [...stock]
+                                        newItems[index] = { ...newItems[index], nombre: nuevo }
+                                        await setStock(newItems)
+                                      }
+                                    }}
+                                    className="text-xs font-medium bg-transparent border-b border-transparent hover:border-border focus:border-blue-400 focus:outline-none px-0.5 min-w-[100px]"
+                                  />
+                                  {esRef && <Badge className="text-[8px] px-1.5 py-0 bg-amber-100 text-amber-700 border-amber-300">Ref.</Badge>}
+                                  {!esRef && estado === 'bajo' && <Badge variant="destructive" className="text-[8px] px-1.5 py-0">Stock bajo</Badge>}
+                                  {!esRef && estado === 'moderado' && <Badge className="text-[8px] px-1.5 py-0 bg-amber-100 text-amber-700 border-amber-300">Moderado</Badge>}
+                                  {!esRef && estado === 'ok' && <Badge className="text-[8px] px-1.5 py-0 bg-emerald-100 text-emerald-700 border-emerald-300">OK</Badge>}
                                 </div>
-                                {sinStock && <p className="text-[10px] text-slate-400">Disponible para presupuestos — no descuenta stock</p>}
-                                {!sinStock && <p className="text-[10px] text-muted-foreground">Min: {item.min}</p>}
+                                {!esRef && <p className="text-[10px] text-muted-foreground">Min: {item.min}</p>}
+                                {esRef && <p className="text-[10px] text-amber-600">Solo para presupuestos — no descuenta stock</p>}
                                 <div className="flex items-center gap-1.5 mt-1">
                                   <span className="text-[10px] text-muted-foreground">Costo:</span>
                                   <input
@@ -185,25 +320,48 @@ export function InventarioTab({ stock, setStock, loading = false }: InventarioTa
                                     className="flex-1 h-6 text-[11px] px-2 border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground/50"
                                   />
                                 </div>
-                                <div className="h-1 rounded-full bg-muted mt-1.5 overflow-hidden">
-                                  <div className="h-full rounded-full transition-all" style={{ width: `${nivel}%`, backgroundColor: color }} />
-                                </div>
+                                {!esRef && (
+                                  <div className="h-1 rounded-full bg-muted mt-1.5 overflow-hidden">
+                                    <div className="h-full rounded-full transition-all" style={{ width: `${nivel}%`, backgroundColor: color }} />
+                                  </div>
+                                )}
                               </div>
+
                               {/* Cantidad */}
                               <div className="text-center min-w-[60px]">
-                                <div className="text-xl font-semibold" style={{ color }}>{item.qty}</div>
-                                <div className="text-[9px] text-muted-foreground">unidades</div>
-                                <div className="flex gap-1 mt-1">
-                                  <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => cambiarStock(index, -1)}>
-                                    <Minus className="h-3 w-3" />
-                                  </Button>
-                                  <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => cambiarStock(index, 1)}>
-                                    <Plus className="h-3 w-3" />
-                                  </Button>
-                                </div>
+                                {esRef ? (
+                                  <div className="text-[10px] text-amber-600 font-medium text-center">Precio<br/>ref.</div>
+                                ) : (
+                                  <>
+                                    <div className="text-xl font-semibold" style={{ color }}>{item.qty}</div>
+                                    <div className="text-[9px] text-muted-foreground">unidades</div>
+                                    <div className="flex gap-1 mt-1">
+                                      <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => cambiarStock(index, -1)}>
+                                        <Minus className="h-3 w-3" />
+                                      </Button>
+                                      <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => cambiarStock(index, 1)}>
+                                        <Plus className="h-3 w-3" />
+                                      </Button>
+                                    </div>
+                                  </>
+                                )}
                               </div>
-                              {/* Eliminar */}
+
+                              {/* Foto + Eliminar */}
                               <div className="flex flex-col items-center gap-1 min-w-[40px]">
+                                {/* Botón foto */}
+                                <button
+                                  onClick={() => { setFotoModal(index); buscarFotoAuto(item.nombre) }}
+                                  title={item.foto_url ? "Cambiar foto" : "Agregar foto"}
+                                  className="h-7 w-7 flex items-center justify-center rounded-lg border border-border hover:border-blue-400 hover:bg-blue-50 transition-all relative overflow-hidden"
+                                >
+                                  {item.foto_url ? (
+                                    <img src={item.foto_url} alt="" className="h-full w-full object-cover" />
+                                  ) : (
+                                    <Camera className="h-3.5 w-3.5 text-muted-foreground" />
+                                  )}
+                                </button>
+                                {/* Eliminar */}
                                 <Button
                                   variant={isConfirming ? "destructive" : "ghost"}
                                   size="icon"
@@ -226,6 +384,97 @@ export function InventarioTab({ stock, setStock, loading = false }: InventarioTa
           </div>
         )}
       </div>
+
+      {/* Modal de foto */}
+      {fotoModal !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-card rounded-2xl shadow-2xl w-full max-w-md p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold">Foto del componente</h3>
+                <p className="text-[11px] text-muted-foreground">{stock[fotoModal]?.nombre}</p>
+              </div>
+              <button onClick={() => { setFotoModal(null); setPreviews([]); setFotoSeleccionada("") }}
+                className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-muted">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Foto actual */}
+            {stock[fotoModal]?.foto_url && (
+              <div className="flex items-center gap-3 p-2 bg-muted/40 rounded-xl">
+                <img src={stock[fotoModal].foto_url} alt="" className="h-14 w-14 object-cover rounded-lg border" />
+                <div className="flex-1">
+                  <p className="text-xs font-medium">Foto actual</p>
+                  <button onClick={() => eliminarFoto(fotoModal!)}
+                    className="text-[11px] text-red-500 hover:text-red-700 mt-0.5">Eliminar foto</button>
+                </div>
+              </div>
+            )}
+
+            {/* Búsqueda automática */}
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <Search className="h-3.5 w-3.5 text-muted-foreground" />
+                <p className="text-xs font-medium">Búsqueda automática</p>
+                <button onClick={() => buscarFotoAuto(stock[fotoModal!]?.nombre)}
+                  className="ml-auto text-[11px] text-blue-500 hover:text-blue-700">
+                  Buscar de nuevo
+                </button>
+              </div>
+              {buscandoFoto ? (
+                <div className="text-center py-4 text-xs text-muted-foreground animate-pulse">Buscando...</div>
+              ) : previews.length > 0 ? (
+                <div className="grid grid-cols-3 gap-2">
+                  {previews.map((url, i) => (
+                    <button key={i} onClick={() => setFotoSeleccionada(url)}
+                      className={`aspect-square rounded-lg overflow-hidden border-2 transition-all ${fotoSeleccionada === url ? 'border-blue-500 ring-2 ring-blue-200' : 'border-border hover:border-blue-300'}`}>
+                      <img src={url} alt="" className="h-full w-full object-cover"
+                        onError={e => { (e.target as HTMLImageElement).parentElement!.style.display = 'none' }} />
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[11px] text-muted-foreground text-center py-2">No se encontraron fotos automáticas.</p>
+              )}
+            </div>
+
+            {/* Subir manual */}
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <Upload className="h-3.5 w-3.5 text-muted-foreground" />
+                <p className="text-xs font-medium">Subir foto manualmente</p>
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer p-2 border-2 border-dashed border-border rounded-xl hover:border-blue-400 hover:bg-blue-50/50 transition-all">
+                <Camera className="h-4 w-4 text-muted-foreground" />
+                <span className="text-xs text-muted-foreground">Elegir imagen desde tu dispositivo</span>
+                <input type="file" accept="image/*" className="hidden"
+                  onChange={e => {
+                    const file = e.target.files?.[0]
+                    if (file && fotoModal !== null) subirFotoManual(fotoModal, file)
+                  }} />
+              </label>
+            </div>
+
+            {/* Confirmar selección */}
+            {fotoSeleccionada && (
+              <div className="flex items-center gap-3 p-2 bg-blue-50 rounded-xl border border-blue-200">
+                <img src={fotoSeleccionada} alt="" className="h-12 w-12 object-cover rounded-lg" />
+                <div className="flex-1">
+                  <p className="text-xs font-medium text-blue-700">Foto seleccionada</p>
+                  <p className="text-[10px] text-blue-500">Confirmá para guardar</p>
+                </div>
+                <Button size="sm" className="h-7 text-xs bg-blue-600 hover:bg-blue-700"
+                  disabled={subiendoFoto}
+                  onClick={() => fotoModal !== null && guardarFoto(fotoModal, fotoSeleccionada)}>
+                  <Check className="h-3 w-3 mr-1" />
+                  {subiendoFoto ? "Guardando..." : "Confirmar"}
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

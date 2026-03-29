@@ -73,6 +73,15 @@ export function ArmadoTab({ stock, setStock, armado, setArmado, margenGlobal, se
   const [slotAviso, setSlotAviso] = useState<Record<string, string>>({})
   const [expandedSlots, setExpandedSlots] = useState<Record<string, boolean>>({})
   const [precioFinalManual, setPrecioFinalManual] = useState<string>("")
+  const [congelados, setCongelados] = useState<Set<number>>(new Set())
+
+  const toggleCongelar = (i: number) => {
+    setCongelados(prev => {
+      const next = new Set(prev)
+      if (next.has(i)) next.delete(i); else next.add(i)
+      return next
+    })
+  }
 
   useEffect(() => {
     setPcFecha(new Date().toLocaleDateString('es-AR'))
@@ -92,12 +101,19 @@ export function ArmadoTab({ stock, setStock, armado, setArmado, margenGlobal, se
   const enRojo = ganancia < 0
   const precioRecomendado = Math.round(totalCosto * (1 + margenGlobal / 100))
 
-  // Si hay precio manual → distribuye proporcionalmente por pventa actual
+  // Suma de los congelados (precio fijo)
+  const totalCongelado = armado.reduce((sum, a, i) => sum + (congelados.has(i) ? a.pventa * a.qty : 0), 0)
+  // Suma de los no congelados
+  const totalLibre = armado.reduce((sum, a, i) => sum + (!congelados.has(i) ? a.pventa * a.qty : 0), 0)
+
+  // Si hay precio manual → distribuye solo entre los no congelados
   // Si no → respeta los pventa editados individualmente
   const armadoConPrecioDistribuido = () => {
     if (precioFinalManual === "" || totalVentaReal === 0) return armado
-    const factor = precioFinalNum / totalVentaReal
-    return armado.map(a => ({ ...a, pventa: Math.round(a.pventa * factor) }))
+    const montoParaLibres = precioFinalNum - totalCongelado
+    if (totalLibre === 0) return armado
+    const factor = montoParaLibres / totalLibre
+    return armado.map((a, i) => congelados.has(i) ? a : { ...a, pventa: Math.round(a.pventa * factor) })
   }
 
   const aplicarMargen = () => {
@@ -134,6 +150,7 @@ export function ArmadoTab({ stock, setStock, armado, setArmado, margenGlobal, se
       sidx: idx,
       ext: false,
       slotId: slot.id,
+      foto_url: s.foto_url || "",
     }])
     setSlotSelected({ ...slotSelected, [slot.id]: "" })
     setSlotQty({ ...slotQty, [slot.id]: "1" })
@@ -263,17 +280,49 @@ export function ArmadoTab({ stock, setStock, armado, setArmado, margenGlobal, se
 
     let total = 0
     doc.setFont('helvetica', 'normal')
-    armadoOrdenado.forEach((a, i) => {
+
+    // Función para cargar imagen como base64
+    const loadImg = (url: string): Promise<string> => new Promise(resolve => {
+      if (!url) return resolve("")
+      const img = new Image(); img.crossOrigin = "anonymous"
+      img.onload = () => {
+        try {
+          const canvas = document.createElement("canvas")
+          canvas.width = img.width; canvas.height = img.height
+          canvas.getContext("2d")!.drawImage(img, 0, 0)
+          resolve(canvas.toDataURL("image/jpeg", 0.8))
+        } catch { resolve("") }
+      }
+      img.onerror = () => resolve("")
+      img.src = url
+    })
+
+    const rowH = 18 // altura de fila con foto
+    for (let i = 0; i < armadoOrdenado.length; i++) {
+      const a = armadoOrdenado[i]
       const sub = a.pventa * a.qty; total += sub
-      if (i % 2 === 0) { doc.setFillColor(248, 249, 252); doc.rect(mg, y - 3.5, cw, 8, 'F') }
+      if (y + rowH > 265) { doc.addPage(); y = 20 }
+      if (i % 2 === 0) { doc.setFillColor(248, 249, 252); doc.rect(mg, y - 1, cw, rowH, 'F') }
+
+      // Foto del componente si existe
+      const fotoUrl = (a as any).foto_url
+      if (fotoUrl) {
+        const imgData = await loadImg(fotoUrl)
+        if (imgData) {
+          try { doc.addImage(imgData, 'JPEG', mg + 1, y, 14, 14) } catch {}
+        }
+      }
+      const textX = fotoUrl ? mg + 17 : mg + 2
+
       doc.setTextColor(20, 20, 20); doc.setFontSize(8.5)
-      doc.text(a.nombre.length > 50 ? a.nombre.slice(0, 48) + '...' : a.nombre, mg + 2, y + 1)
-      doc.setTextColor(100, 100, 100); doc.setFontSize(8); doc.text(a.cat, mg + 100, y + 1)
-      doc.setTextColor(20, 20, 20); doc.setFontSize(8.5); doc.text(String(a.qty), mg + 143, y + 1)
-      doc.setFont('helvetica', 'bold'); doc.text(fmt(sub), W - mg - 2, y + 1, { align: 'right' })
-      doc.setFont('helvetica', 'normal'); y += 8
-      if (y > 255) { doc.addPage(); y = 20 }
-    }); y += 2
+      const nombreTrunc = a.nombre.length > 45 ? a.nombre.slice(0, 43) + '...' : a.nombre
+      doc.text(nombreTrunc, textX, y + 6)
+      doc.setTextColor(100, 100, 100); doc.setFontSize(7.5); doc.text(a.cat, textX, y + 12)
+      doc.setTextColor(20, 20, 20); doc.setFontSize(8.5); doc.text(String(a.qty), mg + 143, y + 7)
+      doc.setFont('helvetica', 'bold'); doc.text(fmt(sub), W - mg - 2, y + 7, { align: 'right' })
+      doc.setFont('helvetica', 'normal'); y += rowH
+    }
+    y += 2
 
     // Usar precio final manual si fue definido
     const totalFinal = precioFinal !== undefined ? precioFinal : total
@@ -616,15 +665,16 @@ export function ArmadoTab({ stock, setStock, armado, setArmado, margenGlobal, se
           <Card className="border-0 bg-card/80 overflow-x-auto">
             <CardContent className="p-3">
               <div className="min-w-[500px]">
-                <div className="grid grid-cols-[1fr_55px_90px_90px_40px] gap-2 text-[10px] font-medium text-muted-foreground border-b pb-2 mb-2">
+                <div className="grid grid-cols-[1fr_55px_90px_90px_32px_40px] gap-2 text-[10px] font-medium text-muted-foreground border-b pb-2 mb-2">
                   <span>Componente</span>
                   <span className="text-center">Cant.</span>
                   <span className="text-right"><Badge variant="destructive" className="text-[8px] px-1">Costo</Badge></span>
                   <span className="text-right"><Badge className="text-[8px] px-1 bg-emerald-600">Cliente</Badge></span>
+                  <span className="text-center text-[8px]">🔒</span>
                   <span></span>
                 </div>
                 {armado.map((a, i) => (
-                  <div key={i} className="grid grid-cols-[1fr_55px_90px_90px_40px] gap-2 items-center py-1.5 border-b border-dashed last:border-0">
+                  <div key={i} className={`grid grid-cols-[1fr_55px_90px_90px_32px_40px] gap-2 items-center py-1.5 border-b border-dashed last:border-0 ${congelados.has(i) ? 'bg-amber-50/50 rounded' : ''}`}>
                     <div>
                       <span className="text-xs font-medium">{a.nombre}</span>
                       <Badge variant="secondary" className="ml-1 text-[8px]">{a.cat}</Badge>
@@ -640,8 +690,15 @@ export function ArmadoTab({ stock, setStock, armado, setArmado, margenGlobal, se
                       type="number"
                       value={a.pventa || ""}
                       onChange={e => updatePrecio(i, 'pventa', parseFloat(e.target.value) || 0)}
-                      className="h-7 text-xs text-right bg-emerald-50 border-emerald-200"
+                      className={`h-7 text-xs text-right ${congelados.has(i) ? 'bg-amber-50 border-amber-300 font-semibold' : 'bg-emerald-50 border-emerald-200'}`}
                     />
+                    <button
+                      onClick={() => toggleCongelar(i)}
+                      title={congelados.has(i) ? "Precio congelado — clic para liberar" : "Clic para congelar este precio"}
+                      className={`h-6 w-6 flex items-center justify-center rounded text-sm transition-all ${congelados.has(i) ? 'text-amber-500 bg-amber-100' : 'text-muted-foreground/40 hover:text-amber-400'}`}
+                    >
+                      {congelados.has(i) ? '🔒' : '🔓'}
+                    </button>
                     <Button variant="ghost" size="icon" className="h-6 w-6 text-red-400 hover:text-red-600" onClick={() => quitarDeArmado(i)}>
                       <X className="h-3 w-3" />
                     </Button>
