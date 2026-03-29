@@ -150,6 +150,7 @@ export function ArmadoTab({ stock, setStock, armado, setArmado, margenGlobal, se
       sidx: idx,
       ext: false,
       slotId: slot.id,
+      foto_url: s.foto_url || "",
     }])
     setSlotSelected({ ...slotSelected, [slot.id]: "" })
     setSlotQty({ ...slotQty, [slot.id]: "1" })
@@ -279,17 +280,49 @@ export function ArmadoTab({ stock, setStock, armado, setArmado, margenGlobal, se
 
     let total = 0
     doc.setFont('helvetica', 'normal')
-    armadoOrdenado.forEach((a, i) => {
+
+    // Función para cargar imagen como base64
+    const loadImg = (url: string): Promise<string> => new Promise(resolve => {
+      if (!url) return resolve("")
+      const img = new Image(); img.crossOrigin = "anonymous"
+      img.onload = () => {
+        try {
+          const canvas = document.createElement("canvas")
+          canvas.width = img.width; canvas.height = img.height
+          canvas.getContext("2d")!.drawImage(img, 0, 0)
+          resolve(canvas.toDataURL("image/jpeg", 0.8))
+        } catch { resolve("") }
+      }
+      img.onerror = () => resolve("")
+      img.src = url
+    })
+
+    const rowH = 18 // altura de fila con foto
+    for (let i = 0; i < armadoOrdenado.length; i++) {
+      const a = armadoOrdenado[i]
       const sub = a.pventa * a.qty; total += sub
-      if (i % 2 === 0) { doc.setFillColor(248, 249, 252); doc.rect(mg, y - 3.5, cw, 8, 'F') }
+      if (y + rowH > 265) { doc.addPage(); y = 20 }
+      if (i % 2 === 0) { doc.setFillColor(248, 249, 252); doc.rect(mg, y - 1, cw, rowH, 'F') }
+
+      // Foto del componente si existe
+      const fotoUrl = (a as any).foto_url
+      if (fotoUrl) {
+        const imgData = await loadImg(fotoUrl)
+        if (imgData) {
+          try { doc.addImage(imgData, 'JPEG', mg + 1, y, 14, 14) } catch {}
+        }
+      }
+      const textX = fotoUrl ? mg + 17 : mg + 2
+
       doc.setTextColor(20, 20, 20); doc.setFontSize(8.5)
-      doc.text(a.nombre.length > 50 ? a.nombre.slice(0, 48) + '...' : a.nombre, mg + 2, y + 1)
-      doc.setTextColor(100, 100, 100); doc.setFontSize(8); doc.text(a.cat, mg + 100, y + 1)
-      doc.setTextColor(20, 20, 20); doc.setFontSize(8.5); doc.text(String(a.qty), mg + 143, y + 1)
-      doc.setFont('helvetica', 'bold'); doc.text(fmt(sub), W - mg - 2, y + 1, { align: 'right' })
-      doc.setFont('helvetica', 'normal'); y += 8
-      if (y > 255) { doc.addPage(); y = 20 }
-    }); y += 2
+      const nombreTrunc = a.nombre.length > 45 ? a.nombre.slice(0, 43) + '...' : a.nombre
+      doc.text(nombreTrunc, textX, y + 6)
+      doc.setTextColor(100, 100, 100); doc.setFontSize(7.5); doc.text(a.cat, textX, y + 12)
+      doc.setTextColor(20, 20, 20); doc.setFontSize(8.5); doc.text(String(a.qty), mg + 143, y + 7)
+      doc.setFont('helvetica', 'bold'); doc.text(fmt(sub), W - mg - 2, y + 7, { align: 'right' })
+      doc.setFont('helvetica', 'normal'); y += rowH
+    }
+    y += 2
 
     // Usar precio final manual si fue definido
     const totalFinal = precioFinal !== undefined ? precioFinal : total
