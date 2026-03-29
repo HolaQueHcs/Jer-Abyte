@@ -86,16 +86,12 @@ export function PagosTab() {
     const estado = nuevoPagado >= registro.total ? "Saldado" : "Pendiente"
     await supabase.from("pagos_parciales").update({ pagos: nuevosPagos, pagado: nuevoPagado, estado, updated_at: new Date().toISOString() }).eq("id", registro.id)
 
-    // Actualizar el registro vinculado en ventas sumando este pago
-    const { data: ventaVinculada } = await supabase.from("ventas").select("*").eq("pagos_parciales_id", registro.id).single()
-    if (ventaVinculada) {
-      const nuevoMonto = parseFloat(ventaVinculada.monto) + monto
-      const nuevaGanancia = nuevoMonto - parseFloat(ventaVinculada.costo)
-      await supabase.from("ventas").update({
-        monto: nuevoMonto,
-        ganancia: nuevaGanancia,
-        updated_at: new Date().toISOString()
-      }).eq("id", ventaVinculada.id)
+    // Actualizar ventas: sumar el monto cobrado a la ganancia real
+    const { data: ventaExist } = await supabase.from("ventas").select("id, monto, costo, ganancia").eq("pagos_parciales_id", registro.id).single()
+    if (ventaExist) {
+      const nuevoMonto = parseFloat(ventaExist.monto) + monto
+      const nuevaGanancia = nuevoMonto - parseFloat(ventaExist.costo)
+      await supabase.from("ventas").update({ monto: nuevoMonto, ganancia: nuevaGanancia, updated_at: new Date().toISOString() }).eq("id", ventaExist.id)
     }
 
     setNuevoPago(prev => ({ ...prev, [registro.id]: "" }))
@@ -104,10 +100,22 @@ export function PagosTab() {
   }
 
   const eliminarPago = async (registro: PagoParcial, pagoId: string) => {
+    const pagoEliminado = registro.pagos.find(p => p.id === pagoId)
     const pagosAct = registro.pagos.filter(p => p.id !== pagoId)
     const nuevoPagado = pagosAct.reduce((s, p) => s + p.monto, 0)
     const estado = nuevoPagado >= registro.total ? "Saldado" : "Pendiente"
     await supabase.from("pagos_parciales").update({ pagos: pagosAct, pagado: nuevoPagado, estado, updated_at: new Date().toISOString() }).eq("id", registro.id)
+
+    // Descontar el monto eliminado de la tabla ventas
+    if (pagoEliminado) {
+      const { data: ventaExist } = await supabase.from("ventas").select("id, monto, costo, ganancia").eq("pagos_parciales_id", registro.id).single()
+      if (ventaExist) {
+        const nuevoMonto = Math.max(0, parseFloat(ventaExist.monto) - pagoEliminado.monto)
+        const nuevaGanancia = nuevoMonto - parseFloat(ventaExist.costo)
+        await supabase.from("ventas").update({ monto: nuevoMonto, ganancia: nuevaGanancia, updated_at: new Date().toISOString() }).eq("id", ventaExist.id)
+      }
+    }
+
     await cargar()
   }
 
