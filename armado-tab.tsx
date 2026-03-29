@@ -104,9 +104,9 @@ export function ArmadoTab({ stock, setStock, armado, setArmado, margenGlobal, se
     setArmado(armado.map(a => ({ ...a, pventa: Math.round(a.pcosto * (1 + margenGlobal / 100)) })))
   }
 
-  // Stock disponible filtrado por categorías del slot
+  // Mostrar todos los componentes del slot, incluso con stock 0
   const stockParaSlot = (slot: typeof SLOTS[0]) =>
-    stock.filter(s => slot.cat.includes(s.cat) && s.qty > 0)
+    stock.filter(s => slot.cat.includes(s.cat))
 
   const agregarDesdeSlot = (slot: typeof SLOTS[0]) => {
     const idx = parseInt(slotSelected[slot.id] || "")
@@ -117,11 +117,14 @@ export function ArmadoTab({ stock, setStock, armado, setArmado, margenGlobal, se
     }
     const s = stock[idx]
     const yaUsado = armado.filter(a => a.sidx === idx).reduce((sum, a) => sum + a.qty, 0)
-    if (yaUsado + qty > s.qty) {
-      setSlotAviso({ ...slotAviso, [slot.id]: `Stock insuficiente. Disponible: ${s.qty - yaUsado}` })
-      return
+    // Advertencia si no hay stock suficiente pero igual deja agregar
+    if (s.qty === 0) {
+      setSlotAviso({ ...slotAviso, [slot.id]: "⚠️ Sin stock — solo para presupuesto" })
+    } else if (yaUsado + qty > s.qty) {
+      setSlotAviso({ ...slotAviso, [slot.id]: `⚠️ Stock insuficiente. Disponible: ${s.qty - yaUsado}` })
+    } else {
+      setSlotAviso({ ...slotAviso, [slot.id]: "" })
     }
-    setSlotAviso({ ...slotAviso, [slot.id]: "" })
     setArmado([...armado, {
       nombre: s.nombre,
       cat: s.cat,

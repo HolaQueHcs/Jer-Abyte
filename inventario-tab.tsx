@@ -26,10 +26,8 @@ export function InventarioTab({ stock, setStock, loading = false }: InventarioTa
   const [cantidad, setCantidad] = useState("")
   const [minimo, setMinimo] = useState("2")
   const [nota, setNota] = useState("")
-  const [tipo, setTipo] = useState<'real' | 'referencia'>('real')
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null)
   const [guardando, setGuardando] = useState(false)
-  const [filtro, setFiltro] = useState<'todos' | 'real' | 'referencia'>('todos')
 
   const agregarComponente = async () => {
     if (!nombre.trim()) return
@@ -38,18 +36,15 @@ export function InventarioTab({ stock, setStock, loading = false }: InventarioTa
       nombre: nombre.trim(),
       cat: categoria,
       precio: parseFloat(precio) || 0,
-      qty: tipo === 'referencia' ? 0 : (parseInt(cantidad) || 0),
-      min: tipo === 'referencia' ? 0 : (parseInt(minimo) || 1),
-      nota: nota.trim(),
-      tipo
+      qty: parseInt(cantidad) || 0,
+      min: parseInt(minimo) || 1,
+      nota: nota.trim()
     }])
     setNombre(""); setPrecio(""); setCantidad(""); setMinimo("2"); setNota("")
     setGuardando(false)
   }
 
   const cambiarStock = async (index: number, delta: number) => {
-    const item = stock[index]
-    if (item.tipo === 'referencia') return
     const newItems = [...stock]
     newItems[index] = { ...newItems[index], qty: Math.max(0, newItems[index].qty + delta) }
     await setStock(newItems)
@@ -67,10 +62,7 @@ export function InventarioTab({ stock, setStock, loading = false }: InventarioTa
     }
   }
 
-  const stockFiltrado = filtro === 'todos' ? stock : stock.filter(s => s.tipo === filtro)
-  const categoriasConItems = [...new Set(stockFiltrado.map(s => s.cat))]
-  const cantRef = stock.filter(s => s.tipo === 'referencia').length
-  const cantReal = stock.filter(s => s.tipo !== 'referencia').length
+  const categoriasConItems = [...new Set(stock.map(s => s.cat))]
 
   return (
     <div className="space-y-5">
@@ -79,20 +71,6 @@ export function InventarioTab({ stock, setStock, loading = false }: InventarioTa
         <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground mb-2">Agregar componente</p>
         <Card className="border-0 bg-card/80">
           <CardContent className="p-4 space-y-3">
-            {/* Tipo */}
-            <div className="flex gap-2">
-              <button
-                onClick={() => setTipo('real')}
-                className={`flex-1 py-2 rounded-xl text-xs font-medium border-2 transition-colors ${tipo === 'real' ? 'bg-emerald-500 text-white border-emerald-500' : 'border-border text-muted-foreground hover:border-emerald-400'}`}>
-                🟢 Real — tengo en stock
-              </button>
-              <button
-                onClick={() => setTipo('referencia')}
-                className={`flex-1 py-2 rounded-xl text-xs font-medium border-2 transition-colors ${tipo === 'referencia' ? 'bg-amber-500 text-white border-amber-500' : 'border-border text-muted-foreground hover:border-amber-400'}`}>
-                🟡 Referencia — para presupuestos
-              </button>
-            </div>
-
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <label className="text-[10px] text-muted-foreground">Nombre</label>
@@ -113,23 +91,20 @@ export function InventarioTab({ stock, setStock, loading = false }: InventarioTa
                 <label className="text-[10px] text-muted-foreground">Precio de costo ($)</label>
                 <Input type="number" placeholder="ej: 180000" value={precio} onChange={(e) => setPrecio(e.target.value)} className="h-8 text-sm" />
               </div>
-              {tipo === 'real' && (
-                <div className="space-y-1">
-                  <label className="text-[10px] text-muted-foreground">Cantidad en stock</label>
-                  <Input type="number" placeholder="ej: 3" value={cantidad} onChange={(e) => setCantidad(e.target.value)} className="h-8 text-sm" />
-                </div>
-              )}
-            </div>
-            {tipo === 'real' && (
               <div className="space-y-1">
-                <label className="text-[10px] text-muted-foreground">Stock minimo para alerta</label>
-                <Input type="number" value={minimo} onChange={(e) => setMinimo(e.target.value)} className="h-8 text-sm w-24" />
+                <label className="text-[10px] text-muted-foreground">Cantidad en stock</label>
+                <Input type="number" placeholder="ej: 3 — poné 0 si no tenés" value={cantidad} onChange={(e) => setCantidad(e.target.value)} className="h-8 text-sm" />
               </div>
-            )}
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] text-muted-foreground">Stock mínimo para alerta</label>
+              <Input type="number" value={minimo} onChange={(e) => setMinimo(e.target.value)} className="h-8 text-sm w-24" />
+            </div>
             <div className="space-y-1">
               <label className="text-[10px] text-muted-foreground">📝 Nota privada (ej: dónde comprarlo)</label>
               <Input placeholder="ej: MercadoLibre — vendedor TechStore" value={nota} onChange={(e) => setNota(e.target.value)} className="h-8 text-sm" />
             </div>
+            <p className="text-[10px] text-muted-foreground">💡 Si ponés cantidad 0 igual aparece en el Armado de PC para presupuestos, con una advertencia de sin stock.</p>
             <Button size="sm" onClick={agregarComponente} disabled={guardando} className="h-8 text-xs">
               <Plus className="h-3 w-3 mr-1" />{guardando ? "Guardando..." : "Agregar al inventario"}
             </Button>
@@ -139,56 +114,44 @@ export function InventarioTab({ stock, setStock, loading = false }: InventarioTa
 
       {/* Inventario actual */}
       <div>
-        <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
-          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-            Inventario — {cantReal} reales · {cantRef} de referencia
-          </p>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Inventario actual</p>
           {guardando && <span className="text-[10px] text-blue-500 animate-pulse">Guardando...</span>}
-        </div>
-
-        {/* Filtros */}
-        <div className="flex gap-1 mb-3">
-          {(['todos', 'real', 'referencia'] as const).map(f => (
-            <button key={f} onClick={() => setFiltro(f)}
-              className={`text-[11px] px-2.5 py-1 rounded-full border transition-colors ${filtro === f ? 'bg-blue-600 text-white border-blue-600' : 'border-border text-muted-foreground hover:border-blue-400'}`}>
-              {f === 'todos' ? 'Todos' : f === 'real' ? '🟢 Reales' : '🟡 Referencia'}
-            </button>
-          ))}
         </div>
 
         {loading ? (
           <div className="text-center py-8 text-xs text-muted-foreground animate-pulse">Cargando inventario...</div>
-        ) : stockFiltrado.length === 0 ? (
-          <div className="text-center py-8 text-xs text-muted-foreground">Sin componentes.</div>
+        ) : stock.length === 0 ? (
+          <div className="text-center py-8 text-xs text-muted-foreground">Sin componentes en el inventario.</div>
         ) : (
           <div className="space-y-4">
             {categoriasConItems.map(cat => {
-              const items = stockFiltrado.filter(s => s.cat === cat)
+              const items = stock.filter(s => s.cat === cat)
               return (
                 <div key={cat}>
                   <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground mb-2">{cat}</p>
                   <div className="space-y-2">
                     {items.map(item => {
                       const index = stock.indexOf(item)
-                      const esRef = item.tipo === 'referencia'
-                      const nivel = esRef ? 0 : Math.min(100, Math.round((item.qty / (item.min * 3)) * 100))
-                      const estado = esRef ? 'ref' : item.qty <= item.min ? 'bajo' : item.qty <= item.min * 1.5 ? 'moderado' : 'ok'
-                      const color = estado === 'bajo' ? '#ef4444' : estado === 'moderado' ? '#f59e0b' : estado === 'ref' ? '#f59e0b' : '#10b981'
+                      const sinStock = item.qty === 0
+                      const nivel = sinStock ? 0 : Math.min(100, Math.round((item.qty / (item.min * 3)) * 100))
+                      const estado = sinStock ? 'sin' : item.qty <= item.min ? 'bajo' : item.qty <= item.min * 1.5 ? 'moderado' : 'ok'
+                      const color = estado === 'sin' ? '#94a3b8' : estado === 'bajo' ? '#ef4444' : estado === 'moderado' ? '#f59e0b' : '#10b981'
                       const isConfirming = confirmDelete === index
                       return (
-                        <Card key={index} className={`border-0 ${esRef ? 'bg-amber-50/50 dark:bg-amber-950/10 border border-amber-200/50' : 'bg-card/80'}`}>
+                        <Card key={index} className={`border-0 ${sinStock ? 'bg-slate-50/50 dark:bg-slate-900/20' : 'bg-card/80'}`}>
                           <CardContent className="p-3">
                             <div className="flex items-center gap-3">
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 flex-wrap mb-1">
                                   <span className="text-xs font-medium">{item.nombre}</span>
-                                  {esRef && <Badge className="text-[8px] px-1.5 py-0 bg-amber-100 text-amber-700 border-amber-300">Ref.</Badge>}
-                                  {!esRef && estado === 'bajo' && <Badge variant="destructive" className="text-[8px] px-1.5 py-0">Stock bajo</Badge>}
-                                  {!esRef && estado === 'moderado' && <Badge className="text-[8px] px-1.5 py-0 bg-amber-100 text-amber-700 border-amber-300">Moderado</Badge>}
-                                  {!esRef && estado === 'ok' && <Badge className="text-[8px] px-1.5 py-0 bg-emerald-100 text-emerald-700 border-emerald-300">OK</Badge>}
+                                  {sinStock && <Badge className="text-[8px] px-1.5 py-0 bg-slate-100 text-slate-500 border-slate-300">Sin stock</Badge>}
+                                  {!sinStock && estado === 'bajo' && <Badge variant="destructive" className="text-[8px] px-1.5 py-0">Stock bajo</Badge>}
+                                  {!sinStock && estado === 'moderado' && <Badge className="text-[8px] px-1.5 py-0 bg-amber-100 text-amber-700 border-amber-300">Moderado</Badge>}
+                                  {!sinStock && estado === 'ok' && <Badge className="text-[8px] px-1.5 py-0 bg-emerald-100 text-emerald-700 border-emerald-300">OK</Badge>}
                                 </div>
-                                {!esRef && <p className="text-[10px] text-muted-foreground">Min: {item.min}</p>}
-                                {esRef && <p className="text-[10px] text-amber-600">Solo para presupuestos — no descuenta stock</p>}
+                                {sinStock && <p className="text-[10px] text-slate-400">Disponible para presupuestos — no descuenta stock</p>}
+                                {!sinStock && <p className="text-[10px] text-muted-foreground">Min: {item.min}</p>}
                                 <div className="flex items-center gap-1.5 mt-1">
                                   <span className="text-[10px] text-muted-foreground">Costo:</span>
                                   <input
@@ -222,33 +185,23 @@ export function InventarioTab({ stock, setStock, loading = false }: InventarioTa
                                     className="flex-1 h-6 text-[11px] px-2 border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground/50"
                                   />
                                 </div>
-                                {!esRef && (
-                                  <div className="h-1 rounded-full bg-muted mt-1.5 overflow-hidden">
-                                    <div className="h-full rounded-full transition-all" style={{ width: `${nivel}%`, backgroundColor: color }} />
-                                  </div>
-                                )}
+                                <div className="h-1 rounded-full bg-muted mt-1.5 overflow-hidden">
+                                  <div className="h-full rounded-full transition-all" style={{ width: `${nivel}%`, backgroundColor: color }} />
+                                </div>
                               </div>
-
                               {/* Cantidad */}
                               <div className="text-center min-w-[60px]">
-                                {esRef ? (
-                                  <div className="text-[10px] text-amber-600 font-medium text-center">Precio<br/>ref.</div>
-                                ) : (
-                                  <>
-                                    <div className="text-xl font-semibold" style={{ color }}>{item.qty}</div>
-                                    <div className="text-[9px] text-muted-foreground">unidades</div>
-                                    <div className="flex gap-1 mt-1">
-                                      <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => cambiarStock(index, -1)}>
-                                        <Minus className="h-3 w-3" />
-                                      </Button>
-                                      <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => cambiarStock(index, 1)}>
-                                        <Plus className="h-3 w-3" />
-                                      </Button>
-                                    </div>
-                                  </>
-                                )}
+                                <div className="text-xl font-semibold" style={{ color }}>{item.qty}</div>
+                                <div className="text-[9px] text-muted-foreground">unidades</div>
+                                <div className="flex gap-1 mt-1">
+                                  <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => cambiarStock(index, -1)}>
+                                    <Minus className="h-3 w-3" />
+                                  </Button>
+                                  <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => cambiarStock(index, 1)}>
+                                    <Plus className="h-3 w-3" />
+                                  </Button>
+                                </div>
                               </div>
-
                               {/* Eliminar */}
                               <div className="flex flex-col items-center gap-1 min-w-[40px]">
                                 <Button
