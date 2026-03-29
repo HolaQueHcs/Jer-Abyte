@@ -29,6 +29,7 @@ export interface StockItem {
   min: number
   nota?: string
   tipo?: 'real' | 'referencia'
+  foto_url?: string
 }
 
 export interface ArmadoItem {
@@ -40,6 +41,7 @@ export interface ArmadoItem {
   sidx: number | null
   ext: boolean
   slotId?: string
+  foto_url?: string
 }
 
 export interface ChecklistItem {
