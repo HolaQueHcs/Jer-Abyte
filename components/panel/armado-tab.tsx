@@ -206,6 +206,11 @@ export function ArmadoTab({ stock, setStock, armado, setArmado, margenGlobal, se
     const newArmado = [...armado]
     newArmado[index][field] = value
     setArmado(newArmado)
+    // Si se edita un precio de venta individual, limpiar el manual
+    // para que el total se recalcule desde la suma real de las filas
+    if (field === 'pventa') {
+      setPrecioFinalManual("")
+    }
   }
 
   const toggleSlot = (slotId: string) => {
