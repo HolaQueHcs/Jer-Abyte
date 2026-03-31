@@ -141,11 +141,13 @@ export function ArmadoTab({ stock, setStock, armado, setArmado, margenGlobal, se
     } else {
       setSlotAviso({ ...slotAviso, [slot.id]: "" })
     }
+    // Usar precio_venta del inventario si está definido, sino aplicar margen global
+    const pventaInicial = (s.precio_venta && s.precio_venta > 0) ? s.precio_venta : precioVenta(s.precio)
     setArmado([...armado, {
       nombre: s.nombre,
       cat: s.cat,
       pcosto: s.precio,
-      pventa: precioVenta(s.precio),
+      pventa: pventaInicial,
       qty,
       sidx: idx,
       ext: false,
@@ -665,16 +667,17 @@ export function ArmadoTab({ stock, setStock, armado, setArmado, margenGlobal, se
           <Card className="border-0 bg-card/80 overflow-x-auto">
             <CardContent className="p-3">
               <div className="min-w-[500px]">
-                <div className="grid grid-cols-[1fr_55px_90px_90px_32px_40px] gap-2 text-[10px] font-medium text-muted-foreground border-b pb-2 mb-2">
+                <div className="grid grid-cols-[1fr_55px_90px_90px_50px_32px_40px] gap-2 text-[10px] font-medium text-muted-foreground border-b pb-2 mb-2">
                   <span>Componente</span>
                   <span className="text-center">Cant.</span>
                   <span className="text-right"><Badge variant="destructive" className="text-[8px] px-1">Costo</Badge></span>
                   <span className="text-right"><Badge className="text-[8px] px-1 bg-emerald-600">Cliente</Badge></span>
+                  <span className="text-center text-[8px] text-emerald-600">%</span>
                   <span className="text-center text-[8px]">🔒</span>
                   <span></span>
                 </div>
                 {armado.map((a, i) => (
-                  <div key={i} className={`grid grid-cols-[1fr_55px_90px_90px_32px_40px] gap-2 items-center py-1.5 border-b border-dashed last:border-0 ${congelados.has(i) ? 'bg-amber-50/50 rounded' : ''}`}>
+                  <div key={i} className={`grid grid-cols-[1fr_55px_90px_90px_50px_32px_40px] gap-2 items-center py-1.5 border-b border-dashed last:border-0 ${congelados.has(i) ? 'bg-amber-50/50 rounded' : ''}`}>
                     <div>
                       <span className="text-xs font-medium">{a.nombre}</span>
                       <Badge variant="secondary" className="ml-1 text-[8px]">{a.cat}</Badge>
@@ -692,6 +695,14 @@ export function ArmadoTab({ stock, setStock, armado, setArmado, margenGlobal, se
                       onChange={e => updatePrecio(i, 'pventa', parseFloat(e.target.value) || 0)}
                       className={`h-7 text-xs text-right ${congelados.has(i) ? 'bg-amber-50 border-amber-300 font-semibold' : 'bg-emerald-50 border-emerald-200'}`}
                     />
+                    {/* Margen por componente */}
+                    <div className="text-center">
+                      {a.pcosto > 0 ? (
+                        <span className={`text-[10px] font-semibold ${a.pventa >= a.pcosto ? 'text-emerald-600' : 'text-red-500'}`}>
+                          {a.pventa >= a.pcosto ? '+' : ''}{Math.round(((a.pventa - a.pcosto) / a.pcosto) * 100)}%
+                        </span>
+                      ) : <span className="text-[10px] text-muted-foreground/40">—</span>}
+                    </div>
                     <button
                       onClick={() => toggleCongelar(i)}
                       title={congelados.has(i) ? "Precio congelado — clic para liberar" : "Clic para congelar este precio"}
