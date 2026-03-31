@@ -27,6 +27,7 @@ export function InventarioTab({ stock, setStock, loading = false }: InventarioTa
   const [cantidad, setCantidad] = useState("")
   const [minimo, setMinimo] = useState("2")
   const [nota, setNota] = useState("")
+  const [precioVenta, setPrecioVenta] = useState("")
   const [tipo, setTipo] = useState<'real' | 'referencia'>('real')
   const supabase = createClient()
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null)
@@ -77,12 +78,13 @@ export function InventarioTab({ stock, setStock, loading = false }: InventarioTa
       nombre: nombre.trim(),
       cat: categoria,
       precio: parseFloat(precio) || 0,
+      precio_venta: parseFloat(precioVenta) || 0,
       qty: tipo === 'referencia' ? 0 : (parseInt(cantidad) || 0),
       min: tipo === 'referencia' ? 0 : (parseInt(minimo) || 1),
       nota: nota.trim(),
       tipo
     }])
-    setNombre(""); setPrecio(""); setCantidad(""); setMinimo("2"); setNota("")
+    setNombre(""); setPrecio(""); setPrecioVenta(""); setCantidad(""); setMinimo("2"); setNota("")
     setGuardando(false)
   }
 
@@ -151,6 +153,10 @@ export function InventarioTab({ stock, setStock, loading = false }: InventarioTa
               <div className="space-y-1">
                 <label className="text-[10px] text-muted-foreground">Precio de costo ($)</label>
                 <Input type="number" placeholder="ej: 180000" value={precio} onChange={(e) => setPrecio(e.target.value)} className="h-8 text-sm" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] text-muted-foreground">💰 Precio sugerido de venta ($) <span className="text-muted-foreground/60">(opcional)</span></label>
+                <Input type="number" placeholder="ej: 220000" value={precioVenta} onChange={(e) => setPrecioVenta(e.target.value)} className="h-8 text-sm bg-emerald-50 border-emerald-200" />
               </div>
               {tipo === 'real' && (
                 <div className="space-y-1">
@@ -240,7 +246,7 @@ export function InventarioTab({ stock, setStock, loading = false }: InventarioTa
                                 </div>
                                 {!esRef && <p className="text-[10px] text-muted-foreground">Min: {item.min}</p>}
                                 {esRef && <p className="text-[10px] text-amber-600">Solo para presupuestos — no descuenta stock</p>}
-                                <div className="flex items-center gap-1.5 mt-1">
+                                <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                                   <span className="text-[10px] text-muted-foreground">Costo:</span>
                                   <input
                                     type="number"
@@ -253,8 +259,28 @@ export function InventarioTab({ stock, setStock, loading = false }: InventarioTa
                                         await setStock(newItems)
                                       }
                                     }}
-                                    className="w-28 h-6 text-[11px] px-2 border border-border rounded-md bg-background text-foreground"
+                                    className="w-24 h-6 text-[11px] px-2 border border-border rounded-md bg-background text-foreground"
                                   />
+                                  <span className="text-[10px] text-emerald-600 font-medium ml-1">💰 Venta:</span>
+                                  <input
+                                    type="number"
+                                    defaultValue={item.precio_venta || ""}
+                                    placeholder="sin precio"
+                                    onBlur={async (e) => {
+                                      const nuevo = parseFloat(e.target.value) || 0
+                                      if (nuevo !== (item.precio_venta || 0)) {
+                                        const newItems = [...stock]
+                                        newItems[index] = { ...newItems[index], precio_venta: nuevo }
+                                        await setStock(newItems)
+                                      }
+                                    }}
+                                    className="w-24 h-6 text-[11px] px-2 border border-emerald-200 rounded-md bg-emerald-50 text-foreground placeholder:text-muted-foreground/40"
+                                  />
+                                  {item.precio_venta && item.precio_venta > 0 && item.precio > 0 && (
+                                    <span className="text-[10px] text-emerald-600 font-semibold">
+                                      +{Math.round(((item.precio_venta - item.precio) / item.precio) * 100)}%
+                                    </span>
+                                  )}
                                 </div>
                                 <div className="flex items-center gap-1.5 mt-1">
                                   <span className="text-[10px] text-muted-foreground">📝</span>
