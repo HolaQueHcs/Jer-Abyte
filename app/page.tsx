@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Monitor, Cpu, Calculator, Package, BarChart3, CheckSquare, LogOut, Store, Wallet, ShoppingBag } from "lucide-react"
+import { Monitor, Cpu, Calculator, Package, BarChart3, CheckSquare, LogOut, Store, Wallet, ShoppingBag, Layers } from "lucide-react"
 import { ResumenTab } from "@/components/panel/resumen-tab"
 import { ArmadoTab } from "@/components/panel/armado-tab"
 import { CalculadoraTab } from "@/components/panel/calculadora-tab"
@@ -15,6 +15,7 @@ import { AgendaSidebar } from "@/components/panel/agenda-sidebar"
 import { NotasSidebar } from "@/components/panel/notas-sidebar"
 import { PagosTab } from "@/components/panel/pagos-tab"
 import { PcsTab } from "@/components/panel/pcs-tab"
+import { ModelosTab } from "@/components/panel/modelos-tab"
 import { DecorativeBackground } from "@/components/decorative-background"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
@@ -26,11 +27,9 @@ export interface StockItem {
   cat: string
   qty: number
   precio: number
-  precio_venta?: number
   min: number
   nota?: string
   tipo?: 'real' | 'referencia'
-  foto_url?: string
 }
 
 export interface ArmadoItem {
@@ -42,7 +41,6 @@ export interface ArmadoItem {
   sidx: number | null
   ext: boolean
   slotId?: string
-  foto_url?: string
 }
 
 export interface ChecklistItem {
@@ -95,7 +93,7 @@ export default function PanelOperativo() {
     if (!error && data) {
       setStockState(data.map((row: any) => ({
         id: row.id, nombre: row.nombre, cat: row.categoria,
-        qty: row.cantidad, precio: parseFloat(row.precio), precio_venta: parseFloat(row.precio_venta) || 0, min: row.minimo, nota: row.nota || "", tipo: row.tipo || "real",
+        qty: row.cantidad, precio: parseFloat(row.precio), min: row.minimo, nota: row.nota || "", tipo: row.tipo || "real",
       })))
     }
     setLoadingStock(false)
@@ -120,16 +118,16 @@ export default function PanelOperativo() {
     const newStock = typeof updater === "function" ? updater(prev) : updater
     const inserts = newStock.filter(i => !i.id)
     for (const item of inserts) {
-      const { data } = await supabase.from("stock").insert({ nombre: item.nombre, categoria: item.cat, cantidad: item.qty, precio: item.precio, precio_venta: item.precio_venta || 0, minimo: item.min, nota: item.nota || "", tipo: item.tipo || "real" }).select().single()
+      const { data } = await supabase.from("stock").insert({ nombre: item.nombre, categoria: item.cat, cantidad: item.qty, precio: item.precio, minimo: item.min, nota: item.nota || "", tipo: item.tipo || "real" }).select().single()
       if (data) item.id = data.id
     }
     const updates = newStock.filter(i => {
       if (!i.id) return false
       const orig = prev.find(p => p.id === i.id)
-      return orig && (orig.qty !== i.qty || orig.precio !== i.precio || orig.precio_venta !== i.precio_venta || orig.min !== i.min || orig.nombre !== i.nombre || orig.cat !== i.cat || orig.nota !== i.nota || orig.tipo !== i.tipo)
+      return orig && (orig.qty !== i.qty || orig.precio !== i.precio || orig.min !== i.min || orig.nombre !== i.nombre || orig.cat !== i.cat || orig.nota !== i.nota || orig.tipo !== i.tipo)
     })
     for (const item of updates) {
-      await supabase.from("stock").update({ nombre: item.nombre, categoria: item.cat, cantidad: item.qty, precio: item.precio, precio_venta: item.precio_venta || 0, minimo: item.min, nota: item.nota || "", tipo: item.tipo || "real", updated_at: new Date().toISOString() }).eq("id", item.id)
+      await supabase.from("stock").update({ nombre: item.nombre, categoria: item.cat, cantidad: item.qty, precio: item.precio, minimo: item.min, nota: item.nota || "", tipo: item.tipo || "real", updated_at: new Date().toISOString() }).eq("id", item.id)
     }
     const deletes = prev.filter(p => p.id && !newStock.find(n => n.id === p.id))
     for (const item of deletes) await supabase.from("stock").delete().eq("id", item.id!)
@@ -285,6 +283,9 @@ export default function PanelOperativo() {
                   <TabsTrigger value="pcs" className="gap-1.5 text-xs data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md">
                     <Cpu className="h-3.5 w-3.5" />PCs armadas
                   </TabsTrigger>
+                  <TabsTrigger value="modelos" className="gap-1.5 text-xs data-[state=active]:bg-gradient-to-r data-[state=active]:from-violet-500 data-[state=active]:to-violet-600 data-[state=active]:text-white data-[state=active]:shadow-md">
+                    <Layers className="h-3.5 w-3.5" />Modelos
+                  </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="resumen">
@@ -311,6 +312,9 @@ export default function PanelOperativo() {
                 </TabsContent>
                 <TabsContent value="pcs">
                   <PcsTab onVentaRegistrada={guardarVenta} />
+                </TabsContent>
+                <TabsContent value="modelos">
+                  <ModelosTab stock={stock} setStock={setStock} onConfirmarArmado={guardarPcArmada} />
                 </TabsContent>
               </Tabs>
             </div>
