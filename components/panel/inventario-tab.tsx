@@ -249,6 +249,7 @@ export function InventarioTab({ stock, setStock, loading = false }: InventarioTa
                                 <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                                   <span className="text-[10px] text-muted-foreground">Costo:</span>
                                   <input
+                                    key={`precio-${item.id}-${item.precio}`}
                                     type="number"
                                     defaultValue={item.precio}
                                     onBlur={async (e) => {
@@ -263,6 +264,7 @@ export function InventarioTab({ stock, setStock, loading = false }: InventarioTa
                                   />
                                   <span className="text-[10px] text-emerald-600 font-medium ml-1">💰 Venta:</span>
                                   <input
+                                    key={`pventa-${item.id}-${item.precio_venta}`}
                                     type="number"
                                     defaultValue={item.precio_venta || ""}
                                     placeholder="sin precio"
