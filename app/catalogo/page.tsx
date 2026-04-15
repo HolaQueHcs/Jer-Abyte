@@ -79,12 +79,12 @@ function ModalPersonalizar({ item, onClose }: { item: CatalogoItem; onClose: () 
       nombre ? `👤 Nombre: ${nombre}` : "",
       mensaje ? `📝 Nota: ${mensaje}` : "",
     ].filter(Boolean).join("\n")
-    window.open(`https://wa.me/543518085873?text=${encodeURIComponent(lineas)}`, "_blank")
+    window.open(`https://wa.me/543512272839?text=${encodeURIComponent(lineas)}`, "_blank")
   }
 
   const handleConsultar = () => {
     const texto = `Hola! Vi el catálogo de Jer Abyte y me interesa la PC: *${item.nombre}*. ¿Podrían darme más info?`
-    window.open(`https://wa.me/54?text=${encodeURIComponent(texto)}`, "_blank")
+    window.open(`https://wa.me/543512272839?text=${encodeURIComponent(texto)}`, "_blank")
   }
 
   return (
