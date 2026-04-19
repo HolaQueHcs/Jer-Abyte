@@ -16,6 +16,8 @@ const MARCA = "Jer Abyte"
 const LEMA = "La PC que cumple con tus exigencias diarias — vas a tener nuestra confianza y lealtad ante cualquier dificultad."
 const GARANTIA = 6
 const WHATSAPP = "351 227-2839"
+const EMAIL = "JerAbyte.pc@gmail.com"
+const INSTAGRAM = "@jerabyte.pc"
 const REND_DESC: Record<string, string> = {
   "Basico": "Ideal para navegacion web, redes sociales, documentos y uso cotidiano sin exigencia grafica.",
   "Intermedio": "Permite multitarea fluida, juegos en 1080p a framerate estable y edicion de fotos sin problemas.",
@@ -368,7 +370,7 @@ export function ArmadoTab({ stock, setStock, armado, setArmado, margenGlobal, se
       doc.setTextColor(180, 210, 255); doc.setFontSize(7.5); doc.setFont('helvetica', 'italic')
       doc.text(LEMA, W / 2, 290, { align: 'center' })
       doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255)
-      doc.text('WhatsApp: ' + WHATSAPP, mg, 295)
+      doc.text('WA: ' + WHATSAPP + '  |  ' + EMAIL + '  |  IG: ' + INSTAGRAM, mg, 295)
       doc.setFont('helvetica', 'normal'); doc.setTextColor(180, 210, 255)
       doc.text('Pag ' + p + ' de ' + np, W - mg, 295, { align: 'right' })
     }
