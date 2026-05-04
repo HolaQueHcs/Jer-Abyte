@@ -1,366 +1,326 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { ImageIcon, Cpu, HardDrive, Zap, Monitor, Wifi, ThumbsUp, Shield, X, ShoppingCart, Wrench, MessageCircle } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Cpu, Package, Zap, ShieldCheck, MessageCircle } from "lucide-react"
+import { Skeleton } from "@/components/ui/skeleton"
 
-const fmt = (n: number) => '$' + Math.round(n).toLocaleString('es-AR')
-
-const OPCIONES_RAM = [
-  { label: "8 GB (base)", precio: 0 },
-  { label: "16 GB (+$15.000)", precio: 15000 },
-  { label: "32 GB (+$35.000)", precio: 35000 },
-]
-
-const OPCIONES_DISCO = [
-  { label: "SSD 240 GB (base)", precio: 0 },
-  { label: "SSD 480 GB (+$10.000)", precio: 10000 },
-  { label: "SSD 1 TB (+$22.000)", precio: 22000 },
-  { label: "SSD 1 TB + HDD 1 TB (+$38.000)", precio: 38000 },
-]
-
-const OPCIONES_GABINETE = [
-  { label: "Gabinete estándar (base)", precio: 0 },
-  { label: "Gabinete gamer RGB (+$8.000)", precio: 8000 },
-  { label: "Gabinete full tower (+$14.000)", precio: 14000 },
-]
-
-const CONSEJOS = [
-  { icono: Cpu, titulo: "¿Por qué elegir AMD Ryzen?", texto: "Los procesadores Ryzen ofrecen más núcleos por el mismo precio que la competencia. Ideal para gaming, multitarea y streaming simultáneo. En Jer Abyte trabajamos exclusivamente con Ryzen para garantizar el mejor rendimiento por peso." },
-  { icono: Monitor, titulo: "Ryzen 3 vs Ryzen 5: ¿Cuál te conviene?", texto: "El Ryzen 3 es perfecto para uso diario, juegos en 1080p y trabajo de oficina. El Ryzen 5 da un salto enorme: gaming fluido, edición de video y streaming sin cuellos de botella. Para gaming serio, siempre recomendamos Ryzen 5." },
-  { icono: HardDrive, titulo: "SSD + Ryzen = velocidad real", texto: "Un Ryzen con SSD NVMe arranca en segundos y carga juegos hasta 5 veces más rápido que con disco rígido. Todas las PCs de Jer Abyte incluyen SSD como mínimo para que notes la diferencia desde el primer día." },
-  { icono: Zap, titulo: "Ryzen con gráficos integrados", texto: "Los modelos Ryzen con sufijo G (como el 3200G o 5600G) incluyen gráficos integrados Vega. Perfectos para empezar sin GPU dedicada y agregar una placa de video después cuando el presupuesto lo permita." },
-  { icono: Wifi, titulo: "Placa madre compatible con Ryzen", texto: "No todas las motherboards son iguales. Cada generación Ryzen tiene su socket. En Jer Abyte elegimos la placa correcta para tu procesador para que no tengas problemas de compatibilidad ni de actualización futura." },
-  { icono: Shield, titulo: "6 meses de garantía de mano de obra", texto: "Cada PC que armamos viene con 6 meses de garantía de mano de obra. Si algo falla por el armado, lo solucionamos sin costo. Tu tranquilidad es parte del precio." },
-  { icono: ThumbsUp, titulo: "¿Gaming o trabajo con Ryzen?", texto: "Un Ryzen 5 con 16GB de RAM hace las dos cosas sin problemas. Para gaming puro el Ryzen 5 5600G o superior es ideal. Para trabajo pesado como edición de video o diseño 3D, un Ryzen 7 marca la diferencia." },
-]
-
-const BANNERS = [
-  { titulo: "Armadas con precisión y dedicación", subtitulo: "Cada PC pasa por pruebas de estrés antes de la entrega. Tu equipo llega listo para usar.", color: "from-blue-600 to-blue-800" },
-  { titulo: "6 meses de garantía de mano de obra", subtitulo: "Si algo falla por el armado, lo resolvemos sin costo. Esa es nuestra palabra.", color: "from-[#0f2850] to-blue-700" },
-  { titulo: "Solo componentes originales", subtitulo: "Trabajamos únicamente con partes de primera calidad. Sin imitaciones ni componentes dudosos.", color: "from-blue-700 to-indigo-800" },
-  { titulo: "100% AMD Ryzen", subtitulo: "Elegimos Ryzen porque ofrece el mejor rendimiento por peso. Potencia real a precio justo.", color: "from-indigo-700 to-blue-900" },
-  { titulo: "Confianza y lealtad ante todo", subtitulo: "La PC que cumple con tus exigencias diarias. Estamos para vos antes, durante y después de la compra.", color: "from-blue-800 to-[#0f2850]" },
-  { titulo: "Entrega rápida en Córdoba", subtitulo: "PC armada, testeada y lista para usar. Coordinamos la entrega a tu comodidad.", color: "from-blue-600 to-indigo-700" },
-]
-
-interface CatalogoItem {
+interface Producto {
   id: string
   nombre: string
-  descripcion: string
+  categoria: string
+  cantidad: number
+  precio: number
   precio_venta: number
-  estado: string
+  nota: string
   foto_url: string
-}
-
-function ModalPersonalizar({ item, onClose }: { item: CatalogoItem; onClose: () => void }) {
-  const [ram, setRam] = useState(0)
-  const [disco, setDisco] = useState(0)
-  const [gabinete, setGabinete] = useState(0)
-  const [nombre, setNombre] = useState("")
-  const [mensaje, setMensaje] = useState("")
-  const [paso, setPaso] = useState<"config" | "contacto">("config")
-
-  const extra = OPCIONES_RAM[ram].precio + OPCIONES_DISCO[disco].precio + OPCIONES_GABINETE[gabinete].precio
-  const total = item.precio_venta + extra
-
-  const handleWhatsApp = () => {
-    const lineas = [
-      "🖥️ *Pedido desde el catálogo Jer Abyte*",
-      "",
-      `PC: *${item.nombre}*`,
-      `RAM: ${OPCIONES_RAM[ram].label}`,
-      `Disco: ${OPCIONES_DISCO[disco].label}`,
-      `Gabinete: ${OPCIONES_GABINETE[gabinete].label}`,
-      "",
-      `💰 *Total estimado: ${fmt(total)}*`,
-      "",
-      nombre ? `👤 Nombre: ${nombre}` : "",
-      mensaje ? `📝 Nota: ${mensaje}` : "",
-    ].filter(Boolean).join("\n")
-    window.open(`https://wa.me/543512272839?text=${encodeURIComponent(lineas)}`, "_blank")
-  }
-
-  const handleConsultar = () => {
-    const texto = `Hola! Vi el catálogo de Jer Abyte y me interesa la PC: *${item.nombre}*. ¿Podrían darme más info?`
-    window.open(`https://wa.me/543512272839?text=${encodeURIComponent(texto)}`, "_blank")
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm">
-      <div className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
-
-        <div className="bg-gradient-to-r from-[#0f2850] to-[#185FA5] text-white px-5 py-4 flex items-start justify-between">
-          <div className="flex-1 min-w-0">
-            <p className="text-xs text-blue-300 mb-0.5 font-medium uppercase tracking-wide">Personalizá tu PC</p>
-            <h3 className="font-bold text-base leading-snug">{item.nombre}</h3>
-          </div>
-          <button onClick={onClose} className="ml-3 mt-0.5 text-white/60 hover:text-white transition-colors">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        <div className="flex border-b border-gray-100">
-          <button onClick={() => setPaso("config")}
-            className={`flex-1 py-3 text-sm font-medium transition-colors ${paso === "config" ? "text-blue-600 border-b-2 border-blue-600" : "text-gray-400 hover:text-gray-600"}`}>
-            <span className="flex items-center justify-center gap-1.5"><Wrench className="h-3.5 w-3.5" /> Configurar</span>
-          </button>
-          <button onClick={() => setPaso("contacto")}
-            className={`flex-1 py-3 text-sm font-medium transition-colors ${paso === "contacto" ? "text-blue-600 border-b-2 border-blue-600" : "text-gray-400 hover:text-gray-600"}`}>
-            <span className="flex items-center justify-center gap-1.5"><MessageCircle className="h-3.5 w-3.5" /> Pedir</span>
-          </button>
-        </div>
-
-        <div className="overflow-y-auto flex-1 p-5">
-          {paso === "config" ? (
-            <div className="space-y-5">
-              <div>
-                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-2">Memoria RAM</label>
-                <div className="grid grid-cols-1 gap-2">
-                  {OPCIONES_RAM.map((op, i) => (
-                    <button key={i} onClick={() => setRam(i)}
-                      className={`text-left px-4 py-2.5 rounded-xl border text-sm font-medium transition-all ${ram === i ? "border-blue-500 bg-blue-50 text-blue-700" : "border-gray-200 hover:border-gray-300 text-gray-700"}`}>
-                      {op.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-2">Almacenamiento</label>
-                <div className="grid grid-cols-1 gap-2">
-                  {OPCIONES_DISCO.map((op, i) => (
-                    <button key={i} onClick={() => setDisco(i)}
-                      className={`text-left px-4 py-2.5 rounded-xl border text-sm font-medium transition-all ${disco === i ? "border-blue-500 bg-blue-50 text-blue-700" : "border-gray-200 hover:border-gray-300 text-gray-700"}`}>
-                      {op.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-2">Gabinete</label>
-                <div className="grid grid-cols-1 gap-2">
-                  {OPCIONES_GABINETE.map((op, i) => (
-                    <button key={i} onClick={() => setGabinete(i)}
-                      className={`text-left px-4 py-2.5 rounded-xl border text-sm font-medium transition-all ${gabinete === i ? "border-blue-500 bg-blue-50 text-blue-700" : "border-gray-200 hover:border-gray-300 text-gray-700"}`}>
-                      {op.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="bg-gray-50 rounded-xl p-4 text-sm space-y-1.5">
-                <div className="flex justify-between text-gray-600"><span>PC base</span><span>{fmt(item.precio_venta)}</span></div>
-                {OPCIONES_RAM[ram].precio > 0 && <div className="flex justify-between text-gray-500 text-xs"><span>RAM upgrade</span><span>+{fmt(OPCIONES_RAM[ram].precio)}</span></div>}
-                {OPCIONES_DISCO[disco].precio > 0 && <div className="flex justify-between text-gray-500 text-xs"><span>Disco upgrade</span><span>+{fmt(OPCIONES_DISCO[disco].precio)}</span></div>}
-                {OPCIONES_GABINETE[gabinete].precio > 0 && <div className="flex justify-between text-gray-500 text-xs"><span>Gabinete upgrade</span><span>+{fmt(OPCIONES_GABINETE[gabinete].precio)}</span></div>}
-                <div className="border-t border-gray-200 pt-2 mt-2 flex justify-between font-bold text-gray-900 text-base">
-                  <span>Total estimado</span><span className="text-emerald-600">{fmt(total)}</span>
-                </div>
-              </div>
-              <div className="text-xs text-gray-500 space-y-1 bg-blue-50 rounded-xl p-3">
-                <p>🧠 {OPCIONES_RAM[ram].label}</p>
-                <p>💾 {OPCIONES_DISCO[disco].label}</p>
-                <p>🖥 {OPCIONES_GABINETE[gabinete].label}</p>
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1.5">Tu nombre (opcional)</label>
-                <input value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Ej: Sebastián"
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-400" />
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1.5">Nota o consulta (opcional)</label>
-                <textarea value={mensaje} onChange={e => setMensaje(e.target.value)} placeholder="Ej: ¿Incluye monitor? ¿Hacen envío?"
-                  rows={3} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-400 resize-none" />
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="p-4 border-t border-gray-100 bg-white space-y-2">
-          <div className="flex items-center justify-between px-1">
-            <span className="text-xs text-gray-400">Total estimado</span>
-            <span className="text-xl font-bold text-emerald-600">{fmt(total)}</span>
-          </div>
-          {paso === "config" ? (
-            <button onClick={() => setPaso("contacto")}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors text-sm">
-              <ShoppingCart className="h-4 w-4" /> Continuar al pedido
-            </button>
-          ) : (
-            <div className="space-y-2">
-              <button onClick={handleWhatsApp}
-                className="w-full bg-green-500 hover:bg-green-600 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors text-sm">
-                <MessageCircle className="h-4 w-4" /> Enviar pedido por WhatsApp
-              </button>
-              <button onClick={handleConsultar}
-                className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2.5 rounded-xl text-sm transition-colors">
-                Solo consultar
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  )
+  tipo: 'HARDWARE' | 'SERVICIO'
 }
 
 export default function CatalogoPublico() {
-  const [catalogo, setCatalogo] = useState<CatalogoItem[]>([])
+  const [productos, setProductos] = useState<Producto[]>([])
   const [loading, setLoading] = useState(true)
-  const [bannerIdx, setBannerIdx] = useState(0)
-  const [modalItem, setModalItem] = useState<CatalogoItem | null>(null)
   const supabase = createClient()
 
-  const consejoDia = CONSEJOS[new Date().getDay() % CONSEJOS.length]
-  const ConsejoIcono = consejoDia.icono
-
   useEffect(() => {
-    const cargar = async () => {
-      const { data } = await supabase
-        .from("catalogo")
-        .select("id, nombre, descripcion, precio_venta, estado, foto_url")
-        .eq("estado", "Disponible")
-        .order("created_at", { ascending: false })
-      if (data) setCatalogo(data)
-      setLoading(false)
-    }
-    cargar()
-    const interval = setInterval(() => setBannerIdx(i => (i + 1) % BANNERS.length), 4000)
-    return () => clearInterval(interval)
+    cargarProductos()
   }, [])
 
-  const banner = BANNERS[bannerIdx]
+  const cargarProductos = async () => {
+    setLoading(true)
+    const { data, error } = await supabase
+      .from("stock")
+      .select("*")
+      .order("precio_venta", { ascending: false })
+
+    if (!error && data) {
+      setProductos(data.map((p: any) => ({
+        id: p.id,
+        nombre: p.nombre,
+        categoria: p.categoria,
+        cantidad: p.cantidad,
+        precio: parseFloat(p.precio),
+        precio_venta: parseFloat(p.precio_venta),
+        nota: p.nota || "",
+        foto_url: p.foto_url || "",
+        tipo: p.tipo || 'HARDWARE'
+      })))
+    }
+    setLoading(false)
+  }
+
+  const hardware = productos.filter(p => p.tipo === 'HARDWARE' && p.cantidad > 0)
+  const servicios = productos.filter(p => p.tipo === 'SERVICIO')
+
+  const formatoPrecio = (precio: number) => {
+    return new Intl.NumberFormat('es-AR', {
+      style: 'currency',
+      currency: 'ARS',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(precio)
+  }
+
+  const consultarWhatsApp = (producto: Producto) => {
+    const mensaje = producto.tipo === 'SERVICIO' 
+      ? `Hola! Me interesa el servicio: ${producto.nombre}`
+      : `Hola! Me interesa esta PC: ${producto.nombre}`
+    const url = `https://wa.me/5493513054502?text=${encodeURIComponent(mensaje)}`
+    window.open(url, '_blank')
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {modalItem && <ModalPersonalizar item={modalItem} onClose={() => setModalItem(null)} />}
-
-      <div className="bg-gradient-to-r from-[#0f2850] to-[#185FA5] text-white">
-        <div className="max-w-5xl mx-auto px-4 py-8">
-          <div className="flex items-center gap-4 mb-6">
-            <div className="w-14 h-14 rounded-xl bg-white/20 backdrop-blur flex items-center justify-center text-white font-bold text-lg shadow-lg border border-white/30">JA</div>
-            <div>
-              <h1 className="text-2xl font-bold">Jer Abyte</h1>
-              <p className="text-blue-200 text-sm">La PC que cumple con tus exigencias diarias</p>
-            </div>
-          </div>
-          <div className={`bg-gradient-to-r ${banner.color} rounded-2xl p-5 border border-white/20 transition-all duration-700`}>
-            <div className="text-xl font-bold mb-1">{banner.titulo}</div>
-            <div className="text-blue-200 text-sm leading-relaxed">{banner.subtitulo}</div>
-            <div className="flex gap-1.5 mt-4">
-              {BANNERS.map((_, i) => (
-                <button key={i} onClick={() => setBannerIdx(i)}
-                  className={`h-1.5 rounded-full transition-all ${i === bannerIdx ? 'w-6 bg-white' : 'w-1.5 bg-white/40'}`} />
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="max-w-5xl mx-auto px-4 py-8">
-        <div className="bg-white rounded-2xl border border-blue-100 p-5 mb-8 flex gap-4 items-start shadow-sm">
-          <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
-            <ConsejoIcono className="h-5 w-5 text-blue-600" />
-          </div>
-          <div>
-            <div className="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-1">Consejo del día</div>
-            <div className="font-semibold text-gray-900 text-sm mb-1">{consejoDia.titulo}</div>
-            <div className="text-gray-500 text-sm leading-relaxed">{consejoDia.texto}</div>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between mb-5">
-          <div>
-            <h2 className="text-xl font-bold text-gray-900">PCs disponibles</h2>
-            <p className="text-gray-500 text-sm">Equipos Ryzen armados, testeados y listos para entregar</p>
-          </div>
-          {!loading && <Badge className="bg-emerald-100 text-emerald-700 border-0">{catalogo.length} disponibles</Badge>}
-        </div>
-
-        {loading ? (
-          <div className="text-center py-16 text-gray-400">Cargando catálogo...</div>
-        ) : catalogo.length === 0 ? (
-          <div className="text-center py-16 bg-white rounded-2xl border border-gray-100">
-            <div className="text-gray-400 text-lg mb-2">No hay PCs disponibles en este momento</div>
-            <p className="text-gray-400 text-sm mb-4">Volvé pronto o contactanos para consultas</p>
-            <a href="https://wa.me/543512272839?text=Hola!%20Vi%20el%20cat%C3%A1logo%20de%20Jer%20Abyte%20y%20quer%C3%ADa%20consultar"
-              target="_blank" rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
-              Consultar por WhatsApp
-            </a>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {catalogo.map(item => (
-              <div key={item.id} className="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 flex flex-col">
-                {item.foto_url ? (
-                  <div className="h-52 overflow-hidden">
-                    <img src={item.foto_url} alt={item.nombre} className="w-full h-full object-cover hover:scale-105 transition-transform duration-300" />
-                  </div>
-                ) : (
-                  <div className="h-52 bg-gradient-to-br from-gray-100 to-gray-50 flex items-center justify-center">
-                    <ImageIcon className="h-12 w-12 text-gray-300" />
-                  </div>
-                )}
-                <div className="p-4 flex flex-col flex-1">
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <h3 className="font-semibold text-gray-900 leading-tight">{item.nombre}</h3>
-                    <Badge className="bg-emerald-100 text-emerald-700 border-0 text-[10px] shrink-0">Disponible</Badge>
-                  </div>
-                  {item.descripcion && <p className="text-gray-500 text-sm mb-3 leading-relaxed">{item.descripcion}</p>}
-                  <div className="mt-auto pt-3 border-t border-gray-100 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="text-[10px] text-gray-400 mb-0.5">Precio base</div>
-                        <div className="text-2xl font-bold text-emerald-600">{fmt(item.precio_venta)}</div>
-                      </div>
-                      <a href={`https://wa.me/543512272839?text=${encodeURIComponent(`Hola! Vi el catálogo de Jer Abyte y me interesa la PC: ${item.nombre}`)}`}
-                        target="_blank" rel="noopener noreferrer"
-                        className="bg-green-500 hover:bg-green-600 text-white text-sm font-medium px-4 py-2 rounded-xl transition-colors">
-                        Consultar
-                      </a>
-                    </div>
-                    <button onClick={() => setModalItem(item)}
-                      className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold py-2.5 rounded-xl transition-colors">
-                      <Wrench className="h-3.5 w-3.5" /> Personalizar y pedir
-                    </button>
-                  </div>
-                </div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-orange-50">
+      {/* Header */}
+      <header className="border-b bg-white/80 backdrop-blur-sm sticky top-0 z-50 shadow-sm">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 via-blue-600 to-orange-400 text-white shadow-lg font-bold text-sm">
+                JA
               </div>
-            ))}
+              <div>
+                <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-orange-500 bg-clip-text text-transparent">
+                  Jer Abyte
+                </h1>
+                <p className="text-xs text-muted-foreground">La PC que cumple con tus exigencias diarias</p>
+              </div>
+            </div>
+            <Button 
+              onClick={() => window.open('https://wa.me/5493513054502', '_blank')}
+              className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700"
+            >
+              <MessageCircle className="h-4 w-4 mr-2" />
+              Contactar
+            </Button>
           </div>
-        )}
-      </div>
+        </div>
+      </header>
 
-      <div className="bg-[#0f2850] text-center py-8 mt-12">
-        <div className="flex justify-center mb-3">
-          <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-white font-bold text-sm">JA</div>
+      {/* Hero */}
+      <section className="py-12 bg-gradient-to-r from-blue-600 via-blue-700 to-orange-500 text-white">
+        <div className="container mx-auto px-4 text-center">
+          <h2 className="text-4xl md:text-5xl font-bold mb-4">
+            La PC que cumple con tus exigencias diarias
+          </h2>
+          <p className="text-lg md:text-xl text-blue-100 mb-6 max-w-2xl mx-auto">
+            Armadas con precisión y dedicación
+          </p>
+          <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full px-6 py-3">
+            <ShieldCheck className="h-5 w-5" />
+            <span className="font-medium">Cada PC pasa por pruebas de estrés antes de la entrega. Tu equipo llega listo para usar.</span>
+          </div>
         </div>
-        <p className="text-blue-200 text-sm px-4 max-w-lg mx-auto leading-relaxed">
-          Jer Abyte — La PC que cumple con tus exigencias diarias, vas a tener nuestra confianza y lealtad ante cualquier dificultad.
-        </p>
-        <p className="text-blue-300 text-xs mt-2">Garantía de mano de obra: 6 meses · 100% AMD Ryzen</p>
-        <div className="flex items-center justify-center gap-5 mt-4 flex-wrap">
-          <a href="https://wa.me/543512272839" target="_blank" rel="noopener noreferrer"
-            className="flex items-center gap-1.5 text-green-400 hover:text-green-300 text-xs font-medium transition-colors">
-            <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
-            351 227-2839
-          </a>
-          <a href="mailto:JerAbyte.pc@gmail.com"
-            className="flex items-center gap-1.5 text-blue-300 hover:text-blue-200 text-xs font-medium transition-colors">
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
-            JerAbyte.pc@gmail.com
-          </a>
-          <a href="https://www.instagram.com/jerabyte.pc/" target="_blank" rel="noopener noreferrer"
-            className="flex items-center gap-1.5 text-pink-400 hover:text-pink-300 text-xs font-medium transition-colors">
-            <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
-            @jerabyte.pc
-          </a>
+      </section>
+
+      {/* Garantía destacada */}
+      <section className="py-8 bg-gradient-to-r from-orange-400 to-orange-500 border-y border-orange-600">
+        <div className="container mx-auto px-4">
+          <div className="flex items-center justify-center gap-3 text-white">
+            <Zap className="h-6 w-6" />
+            <h3 className="text-lg md:text-xl font-bold">Consejo del día</h3>
+          </div>
+          <p className="text-center text-white/90 mt-2 text-base md:text-lg font-medium">
+            6 meses de garantía de mano de obra
+          </p>
+          <p className="text-center text-white/80 text-sm max-w-3xl mx-auto mt-2">
+            Cada PC que armamos viene con 6 meses de garantía de mano de obra. Si algo falla por el armado, lo solucionamos sin costo. Tu tranquilidad es parte del precio.
+          </p>
         </div>
-      </div>
+      </section>
+
+      {/* Contenido principal */}
+      <section className="container mx-auto px-4 py-12">
+        <Tabs defaultValue="hardware" className="w-full">
+          <TabsList className="grid w-full max-w-md mx-auto grid-cols-2 mb-8 h-12">
+            <TabsTrigger value="hardware" className="text-base font-semibold">
+              <Cpu className="h-4 w-4 mr-2" />
+              Equipos Gamer
+            </TabsTrigger>
+            <TabsTrigger value="servicios" className="text-base font-semibold">
+              <Package className="h-4 w-4 mr-2" />
+              Servicios Técnicos
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Tab: Equipos Gamer (HARDWARE) */}
+          <TabsContent value="hardware">
+            <div className="mb-6 text-center">
+              <h3 className="text-2xl font-bold text-slate-800 mb-2">PCs disponibles</h3>
+              <p className="text-muted-foreground">Equipos Ryzen armados, testeados y listos para entregar</p>
+            </div>
+
+            {loading ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {[1, 2, 3].map(i => (
+                  <Card key={i} className="overflow-hidden">
+                    <Skeleton className="h-48 w-full" />
+                    <CardHeader>
+                      <Skeleton className="h-6 w-3/4 mb-2" />
+                      <Skeleton className="h-4 w-full" />
+                    </CardHeader>
+                    <CardContent>
+                      <Skeleton className="h-20 w-full" />
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : hardware.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-muted-foreground text-lg">No hay equipos disponibles en este momento.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {hardware.map(producto => (
+                  <Card key={producto.id} className="overflow-hidden hover:shadow-xl transition-all border-2 hover:border-blue-200">
+                    {producto.foto_url && (
+                      <div className="relative h-56 bg-gradient-to-br from-slate-100 to-slate-200">
+                        <img 
+                          src={producto.foto_url} 
+                          alt={producto.nombre}
+                          className="w-full h-full object-cover"
+                        />
+                        <Badge className="absolute top-3 right-3 bg-blue-600">
+                          {producto.categoria}
+                        </Badge>
+                      </div>
+                    )}
+                    
+                    <CardHeader>
+                      <CardTitle className="text-xl">{producto.nombre}</CardTitle>
+                      <CardDescription className="text-base line-clamp-2">
+                        {producto.nota}
+                      </CardDescription>
+                    </CardHeader>
+
+                    <CardContent className="space-y-3">
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-3xl font-bold text-blue-600">
+                          {formatoPrecio(producto.precio_venta)}
+                        </span>
+                      </div>
+
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                        <div className="flex items-start gap-2">
+                          <ShieldCheck className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
+                          <div className="text-xs text-green-800 leading-relaxed">
+                            <p className="font-semibold mb-1">Garantía JerAbyte: 6 meses</p>
+                            <p className="text-green-700">La apertura o modificación del equipo fuera de nuestra mano de obra anula la garantía automáticamente.</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Package className="h-4 w-4" />
+                        <span>Envíos a todo el país</span>
+                      </div>
+                    </CardContent>
+
+                    <CardFooter>
+                      <Button 
+                        onClick={() => consultarWhatsApp(producto)}
+                        className="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700"
+                        size="lg"
+                      >
+                        <MessageCircle className="h-4 w-4 mr-2" />
+                        Consultar por WhatsApp
+                      </Button>
+                    </CardFooter>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          {/* Tab: Servicios Técnicos (SERVICIO) */}
+          <TabsContent value="servicios">
+            <div className="mb-6 text-center">
+              <h3 className="text-2xl font-bold text-slate-800 mb-2">Servicios disponibles</h3>
+              <p className="text-muted-foreground">Soluciones técnicas profesionales</p>
+            </div>
+
+            {loading ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+                {[1, 2, 3].map(i => (
+                  <Card key={i}>
+                    <CardHeader>
+                      <Skeleton className="h-6 w-3/4 mb-2" />
+                      <Skeleton className="h-4 w-full" />
+                    </CardHeader>
+                    <CardContent>
+                      <Skeleton className="h-16 w-full" />
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : servicios.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-muted-foreground text-lg">No hay servicios disponibles en este momento.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+                {servicios.map(producto => (
+                  <Card key={producto.id} className="overflow-hidden hover:shadow-xl transition-all border-2 hover:border-orange-200">
+                    <CardHeader className="bg-gradient-to-r from-orange-50 to-orange-100/50">
+                      <div className="flex items-start justify-between gap-2">
+                        <CardTitle className="text-xl flex-1">{producto.nombre}</CardTitle>
+                        <Badge variant="outline" className="bg-white">Servicio</Badge>
+                      </div>
+                    </CardHeader>
+
+                    <CardContent className="space-y-4 pt-6">
+                      <div className="text-sm text-slate-700 leading-relaxed">
+                        {producto.nota}
+                      </div>
+
+                      <div className="flex items-baseline gap-2 pt-2">
+                        <span className="text-3xl font-bold text-orange-600">
+                          {formatoPrecio(producto.precio_venta)}
+                        </span>
+                      </div>
+                    </CardContent>
+
+                    <CardFooter>
+                      <Button 
+                        onClick={() => consultarWhatsApp(producto)}
+                        className="w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700"
+                        size="lg"
+                      >
+                        <MessageCircle className="h-4 w-4 mr-2" />
+                        Consultar disponibilidad
+                      </Button>
+                    </CardFooter>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
+      </section>
+
+      {/* Footer */}
+      <footer className="bg-slate-900 text-white py-8 mt-20">
+        <div className="container mx-auto px-4 text-center">
+          <div className="flex items-center justify-center gap-3 mb-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-orange-400 font-bold text-sm">
+              JA
+            </div>
+            <p className="text-lg font-bold">Jer Abyte</p>
+          </div>
+          <p className="text-slate-400 text-sm mb-4">
+            La PC que cumple con tus exigencias diarias, vas a tener nuestra confianza y lealtad ante cualquier dificultad.
+          </p>
+          <div className="flex items-center justify-center gap-4 text-sm text-slate-400">
+            <span>Garantía de mano de obra: 6 meses</span>
+            <span>·</span>
+            <span>100% AMD Ryzen</span>
+          </div>
+        </div>
+      </footer>
     </div>
   )
 }
