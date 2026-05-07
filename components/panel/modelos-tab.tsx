@@ -1,12 +1,12 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Trash2, ChevronDown, ChevronUp, Zap, Eye, EyeOff, Copy, Tag } from "lucide-react"
+import { Plus, Trash2, ChevronDown, ChevronUp, Zap, Eye, EyeOff, AlertTriangle, DollarSign, Percent } from "lucide-react"
 import type { StockItem } from "@/app/page"
 
 const fmt = (n: number) => '$' + Math.round(n).toLocaleString('es-AR')
@@ -25,6 +25,7 @@ interface ModeloPC {
   nombre: string
   descripcion: string
   componentes: Componente[]
+  margen_ganancia: number
   precio_base: number
   precio_cliente: number
   precio_amigo: number
@@ -56,9 +57,69 @@ export function ModelosTab({ stock, setStock, onConfirmarArmado }: ModelosTabPro
 
   useEffect(() => { cargar() }, [])
 
+  // SINCRONIZACIÓN AUTOMÁTICA: Cuando cambie el stock, recalcular precios de modelos
+  useEffect(() => {
+    sincronizarPrecios()
+  }, [stock])
+
   const cargar = async () => {
     const { data } = await supabase.from("modelos_pc").select("*").order("created_at", { ascending: false })
-    if (data) setModelos(data.map((m: any) => ({ ...m, componentes: m.componentes || [] })))
+    if (data) {
+      setModelos(data.map((m: any) => ({
+        ...m,
+        componentes: m.componentes || [],
+        margen_ganancia: m.margen_ganancia || 25
+      })))
+    }
+  }
+
+  // FUNCIÓN DE SINCRONIZACIÓN: Recalcular precios si cambió algún componente
+  const sincronizarPrecios = async () => {
+    if (modelos.length === 0) return
+    
+    let huboActualizacion = false
+    const modelosActualizados = modelos.map(modelo => {
+      // Recalcular costo basándose en stock actual
+      const costoActual = modelo.componentes.reduce((sum, comp) => {
+        const itemStock = stock[comp.sidx]
+        if (!itemStock) return sum
+        // Si el precio cambió, actualizar
+        if (itemStock.precio !== comp.precio) {
+          comp.precio = itemStock.precio
+          huboActualizacion = true
+        }
+        return sum + itemStock.precio * comp.qty
+      }, 0)
+
+      const precioClienteNuevo = redondear(costoActual * (1 + modelo.margen_ganancia / 100))
+      const precioAmigoNuevo = redondear(precioClienteNuevo * (1 - modelo.descuento_amigo / 100))
+
+      // Si cambió el costo, actualizar DB
+      if (costoActual !== modelo.precio_base || precioClienteNuevo !== modelo.precio_cliente) {
+        huboActualizacion = true
+        return {
+          ...modelo,
+          precio_base: costoActual,
+          precio_cliente: precioClienteNuevo,
+          precio_amigo: precioAmigoNuevo
+        }
+      }
+      return modelo
+    })
+
+    if (huboActualizacion) {
+      // Actualizar en DB
+      for (const modelo of modelosActualizados) {
+        await supabase.from("modelos_pc").update({
+          componentes: modelo.componentes,
+          precio_base: modelo.precio_base,
+          precio_cliente: modelo.precio_cliente,
+          precio_amigo: modelo.precio_amigo,
+          updated_at: new Date().toISOString()
+        }).eq("id", modelo.id)
+      }
+      setModelos(modelosActualizados)
+    }
   }
 
   const calcularCosto = (comps: {sidx: number, qty: number}[]) =>
@@ -81,6 +142,7 @@ export function ModelosTab({ stock, setStock, onConfirmarArmado }: ModelosTabPro
       nombre: nombre.trim(),
       descripcion: descripcion.trim(),
       componentes,
+      margen_ganancia: parseFloat(margen) || 25,
       precio_base: costo,
       precio_cliente: pCliente,
       precio_amigo: pAmigo,
@@ -103,9 +165,20 @@ export function ModelosTab({ stock, setStock, onConfirmarArmado }: ModelosTabPro
     await cargar()
   }
 
+  const actualizarMargen = async (modelo: ModeloPC, nuevoMargen: number) => {
+    const precioClienteNuevo = redondear(modelo.precio_base * (1 + nuevoMargen / 100))
+    const precioAmigoNuevo = redondear(precioClienteNuevo * (1 - modelo.descuento_amigo / 100))
+    await supabase.from("modelos_pc").update({
+      margen_ganancia: nuevoMargen,
+      precio_cliente: precioClienteNuevo,
+      precio_amigo: precioAmigoNuevo,
+      updated_at: new Date().toISOString()
+    }).eq("id", modelo.id)
+    await cargar()
+  }
+
   const actualizarPrecio = async (modelo: ModeloPC, campo: string, valor: number) => {
     const updates: any = { [campo]: valor, updated_at: new Date().toISOString() }
-    // Si cambia precio_cliente, recalcular precio_amigo
     if (campo === "precio_cliente") {
       updates.precio_amigo = redondear(valor * (1 - modelo.descuento_amigo / 100))
     }
@@ -116,14 +189,12 @@ export function ModelosTab({ stock, setStock, onConfirmarArmado }: ModelosTabPro
   const confirmarVenta = async (modelo: ModeloPC, precio: number) => {
     if (!clienteNombre.trim()) return
     setGuardando(true)
-    // Descontar stock
     const newStock = stock.map((s, idx) => {
       const comp = modelo.componentes.find(c => c.sidx === idx)
       if (comp && s.qty > 0) return { ...s, qty: Math.max(0, s.qty - comp.qty) }
       return s
     })
     await setStock(newStock)
-    // Registrar PC armada
     if (onConfirmarArmado) {
       const compsArmado = modelo.componentes.map(c => ({
         nombre: c.nombre, cat: c.cat, pcosto: c.precio,
@@ -153,64 +224,73 @@ export function ModelosTab({ stock, setStock, onConfirmarArmado }: ModelosTabPro
   const costoForm = calcularCosto(compSeleccionados)
   const precioSugeridoForm = redondear(costoForm * (1 + parseFloat(margen) / 100))
 
+  // Solo hardware para los modelos
+  const hardwareStock = stock.filter(s => s.tipo !== 'SERVICIO')
+
   return (
     <div className="space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-semibold">Modelos de PC</p>
-          <p className="text-[10px] text-muted-foreground">Armados pre-definidos con precio listo</p>
+          <p className="text-[10px] text-muted-foreground">START · FLOW · TITAN</p>
         </div>
-        <Button size="sm" onClick={() => setMostrarForm(!mostrarForm)} className="h-8 text-xs gap-1">
-          <Plus className="h-3 w-3" />Nuevo modelo
+        <Button size="sm" onClick={() => setMostrarForm(!mostrarForm)} className="h-8 text-xs">
+          <Plus className="h-3.5 w-3.5 mr-1" />
+          Crear modelo
         </Button>
       </div>
 
-      {/* Form nuevo modelo */}
+      {/* Form crear modelo */}
       {mostrarForm && (
         <Card className="border-0 bg-card/80">
           <CardContent className="p-4 space-y-3">
-            <p className="text-xs font-medium">Crear modelo de PC</p>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <label className="text-[10px] text-muted-foreground">Nombre del modelo *</label>
-                <Input value={nombre} onChange={e => setNombre(e.target.value)} placeholder="ej: PC Gamer Básica" className="h-8 text-sm" />
+                <label className="text-[10px] text-muted-foreground">Nombre del modelo</label>
+                <Input placeholder="ej: FLOW Ryzen 5 3400G" value={nombre} onChange={(e) => setNombre(e.target.value)} className="h-8 text-sm" />
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] text-muted-foreground">Margen de ganancia (%)</label>
-                <Input type="number" value={margen} onChange={e => setMargen(e.target.value)} className="h-8 text-sm" />
+                <label className="text-[10px] text-muted-foreground flex items-center gap-1">
+                  <Percent className="h-3 w-3" />
+                  Margen de ganancia (%)
+                </label>
+                <Input type="number" placeholder="25" value={margen} onChange={(e) => setMargen(e.target.value)} className="h-8 text-sm" />
               </div>
-              <div className="space-y-1 col-span-2">
-                <label className="text-[10px] text-muted-foreground">Descripción</label>
-                <Input value={descripcion} onChange={e => setDescripcion(e.target.value)} placeholder="ej: Ideal para gaming 1080p" className="h-8 text-sm" />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] text-muted-foreground">Descuento para amigos (%)</label>
-                <Input type="number" value={descAmigo} onChange={e => setDescAmigo(e.target.value)} className="h-8 text-sm" />
-              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[10px] text-muted-foreground">Descripción</label>
+              <Input placeholder="ej: Ideal para gaming 1080p y streaming" value={descripcion} onChange={(e) => setDescripcion(e.target.value)} className="h-8 text-sm" />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[10px] text-muted-foreground">Descuento para amigos (%)</label>
+              <Input type="number" placeholder="10" value={descAmigo} onChange={(e) => setDescAmigo(e.target.value)} className="h-8 text-sm" />
             </div>
 
             {/* Selector de componentes */}
             <div>
-              <label className="text-[10px] text-muted-foreground mb-2 block">Componentes del modelo</label>
-              <div className="grid grid-cols-1 gap-1 max-h-48 overflow-y-auto pr-1">
-                {stock.map((s, idx) => {
-                  const seleccionado = compSeleccionados.find(c => c.sidx === idx)
+              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground mb-2">
+                Seleccionar componentes (solo hardware)
+              </p>
+              <div className="space-y-1 max-h-48 overflow-y-auto">
+                {hardwareStock.map((item, index) => {
+                  const seleccionado = compSeleccionados.find(c => c.sidx === index)
                   return (
-                    <div key={idx} className={`flex items-center justify-between px-3 py-1.5 rounded-lg cursor-pointer transition-colors ${seleccionado ? 'bg-blue-50 border border-blue-200' : 'bg-muted/30 hover:bg-muted/60'}`}
-                      onClick={() => seleccionado ? quitarComponente(idx) : agregarComponente(idx)}>
-                      <div>
-                        <span className="text-xs font-medium">{s.nombre}</span>
-                        <span className="text-[10px] text-muted-foreground ml-2">{s.cat} · {fmt(s.precio)}</span>
-                        {s.qty === 0 && <Badge className="ml-1 text-[8px] px-1 bg-slate-100 text-slate-500 border-0">Sin stock</Badge>}
+                    <div key={index} className={`flex items-center justify-between p-2 rounded-lg text-xs cursor-pointer transition-colors ${seleccionado ? 'bg-blue-50 border border-blue-200' : 'bg-muted/30 hover:bg-muted/50'}`}
+                      onClick={() => seleccionado ? quitarComponente(index) : agregarComponente(index)}>
+                      <div className="flex-1">
+                        <span className="font-medium">{item.nombre}</span>
+                        <span className="text-muted-foreground ml-2">({item.cat})</span>
+                        <span className="text-red-500 ml-2">{fmt(item.precio)}</span>
                       </div>
                       {seleccionado && (
-                        <div className="flex items-center gap-1">
-                          <button onClick={e => { e.stopPropagation(); setCompSeleccionados(compSeleccionados.map(c => c.sidx === idx ? { ...c, qty: Math.max(1, c.qty - 1) } : c)) }}
-                            className="w-5 h-5 rounded bg-blue-200 text-blue-800 text-xs font-bold flex items-center justify-center">-</button>
-                          <span className="text-xs font-medium w-4 text-center">{seleccionado.qty}</span>
-                          <button onClick={e => { e.stopPropagation(); agregarComponente(idx) }}
-                            className="w-5 h-5 rounded bg-blue-200 text-blue-800 text-xs font-bold flex items-center justify-center">+</button>
+                        <div className="flex items-center gap-2">
+                          <span className="text-blue-600 font-medium">× {seleccionado.qty}</span>
+                          <Button size="sm" variant="ghost" className="h-5 w-5 p-0" onClick={(e) => { e.stopPropagation(); quitarComponente(index) }}>
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
                         </div>
                       )}
                     </div>
@@ -219,14 +299,15 @@ export function ModelosTab({ stock, setStock, onConfirmarArmado }: ModelosTabPro
               </div>
             </div>
 
-            {costoForm > 0 && (
-              <div className="bg-blue-50 rounded-xl p-3 space-y-1">
+            {/* Preview precios */}
+            {compSeleccionados.length > 0 && (
+              <div className="bg-muted/40 rounded-xl p-3 space-y-1.5">
                 <div className="flex justify-between text-xs">
-                  <span className="text-muted-foreground">Costo total:</span>
+                  <span className="text-muted-foreground">Costo total (sin margen):</span>
                   <span className="font-medium text-red-600">{fmt(costoForm)}</span>
                 </div>
                 <div className="flex justify-between text-xs">
-                  <span className="text-muted-foreground">Precio cliente ({margen}% margen, redondeado):</span>
+                  <span className="text-muted-foreground">Precio cliente ({margen}% margen):</span>
                   <span className="font-semibold text-emerald-600">{fmt(precioSugeridoForm)}</span>
                 </div>
                 <div className="flex justify-between text-xs">
@@ -249,34 +330,52 @@ export function ModelosTab({ stock, setStock, onConfirmarArmado }: ModelosTabPro
       {/* Lista de modelos */}
       {modelos.length === 0 ? (
         <div className="text-center py-10 text-xs text-muted-foreground">
-          No hay modelos todavía. Creá uno para tener armados pre-definidos listos.
+          No hay modelos todavía. Creá START, FLOW o TITAN para tener armados predefinidos.
         </div>
       ) : (
         <div className="space-y-3">
           {modelos.map(modelo => {
             const abierto = expandido === modelo.id
             const confirmando = confirmandoId === modelo.id
-            const stockSuficiente = modelo.componentes.every(c => (stock[c.sidx]?.qty || 0) >= c.qty)
+            
+            // VERIFICACIÓN DE STOCK: Si algún componente está en 0, mostrar "Consultar disponibilidad"
+            const componentesSinStock = modelo.componentes.filter(c => (stock[c.sidx]?.qty || 0) === 0)
+            const stockSuficiente = componentesSinStock.length === 0
+            const stockBajo = !stockSuficiente || modelo.componentes.some(c => {
+              const item = stock[c.sidx]
+              return item && item.qty > 0 && item.qty < c.qty
+            })
+
             return (
               <Card key={modelo.id} className="border-0 bg-card/80 overflow-hidden">
                 <CardContent className="p-0">
                   {/* Cabecera */}
                   <div className="flex items-center gap-3 p-3 cursor-pointer hover:bg-muted/20" onClick={() => setExpandido(abierto ? null : modelo.id)}>
                     <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${stockSuficiente ? 'bg-emerald-100' : 'bg-amber-100'}`}>
-                      <Zap className={`h-4 w-4 ${stockSuficiente ? 'text-emerald-600' : 'text-amber-500'}`} />
+                      {stockSuficiente ? (
+                        <Zap className="h-4 w-4 text-emerald-600" />
+                      ) : (
+                        <AlertTriangle className="h-4 w-4 text-amber-600" />
+                      )}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-medium">{modelo.nombre}</span>
                         {modelo.publicado && <Badge className="text-[9px] px-1.5 border-0 bg-emerald-100 text-emerald-700">Publicado</Badge>}
-                        {!stockSuficiente && <Badge className="text-[9px] px-1.5 border-0 bg-amber-100 text-amber-700">Stock bajo</Badge>}
+                        {!stockSuficiente && (
+                          <Badge className="text-[9px] px-1.5 border-0 bg-amber-100 text-amber-700">Consultar disponibilidad</Badge>
+                        )}
+                        {stockBajo && stockSuficiente && (
+                          <Badge className="text-[9px] px-1.5 border-0 bg-orange-100 text-orange-700">Stock justo</Badge>
+                        )}
                       </div>
                       {modelo.descripcion && <div className="text-[10px] text-muted-foreground">{modelo.descripcion}</div>}
-                      <div className="text-[10px] text-muted-foreground">{modelo.componentes.length} componentes</div>
+                      <div className="text-[10px] text-muted-foreground">{modelo.componentes.length} componentes · Margen {modelo.margen_ganancia}%</div>
                     </div>
                     <div className="text-right flex-shrink-0">
                       <div className="text-xs font-semibold text-emerald-600">{fmt(modelo.precio_cliente)}</div>
                       <div className="text-[10px] text-blue-500">Amigo: {fmt(modelo.precio_amigo)}</div>
+                      <div className="text-[9px] text-red-400">Costo: {fmt(modelo.precio_base)}</div>
                     </div>
                     {abierto ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
                   </div>
@@ -289,15 +388,24 @@ export function ModelosTab({ stock, setStock, onConfirmarArmado }: ModelosTabPro
                         <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground mb-2">Componentes</p>
                         <div className="space-y-1">
                           {modelo.componentes.map((comp, i) => {
-                            const enStock = (stock[comp.sidx]?.qty || 0) >= comp.qty
+                            const itemStock = stock[comp.sidx]
+                            const enStock = (itemStock?.qty || 0) >= comp.qty
+                            const sinStock = (itemStock?.qty || 0) === 0
+                            // Detectar si el precio cambió
+                            const precioCambio = itemStock && itemStock.precio !== comp.precio
+                            
                             return (
                               <div key={i} className="flex items-center justify-between bg-muted/30 rounded-lg px-3 py-1.5">
-                                <div>
+                                <div className="flex-1">
                                   <span className="text-[11px] font-medium">{comp.nombre}</span>
                                   <span className="text-[10px] text-muted-foreground ml-2">{comp.cat} × {comp.qty}</span>
+                                  {precioCambio && (
+                                    <Badge className="text-[8px] px-1 ml-2 border-0 bg-blue-100 text-blue-700">Precio actualizado</Badge>
+                                  )}
                                 </div>
                                 <div className="flex items-center gap-2">
-                                  {!enStock && <Badge className="text-[8px] px-1 border-0 bg-amber-100 text-amber-700">Sin stock</Badge>}
+                                  {sinStock && <Badge className="text-[8px] px-1 border-0 bg-red-100 text-red-700">Sin stock</Badge>}
+                                  {!enStock && !sinStock && <Badge className="text-[8px] px-1 border-0 bg-amber-100 text-amber-700">Stock insuficiente</Badge>}
                                   <span className="text-[10px] text-red-500">{fmt(comp.precio * comp.qty)}</span>
                                 </div>
                               </div>
@@ -306,10 +414,19 @@ export function ModelosTab({ stock, setStock, onConfirmarArmado }: ModelosTabPro
                         </div>
                       </div>
 
-                      {/* Precios editables */}
+                      {/* Margen ajustable */}
                       <div>
-                        <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground mb-2">Precios</p>
-                        <div className="grid grid-cols-2 gap-2">
+                        <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-1">
+                          <DollarSign className="h-3 w-3" />
+                          Margen y precios
+                        </p>
+                        <div className="grid grid-cols-3 gap-2">
+                          <div className="space-y-1">
+                            <label className="text-[10px] text-muted-foreground">Margen (%)</label>
+                            <input type="number" defaultValue={modelo.margen_ganancia}
+                              onBlur={e => actualizarMargen(modelo, parseFloat(e.target.value) || 25)}
+                              className="w-full h-7 text-xs px-2 border border-border rounded-lg bg-background font-semibold" />
+                          </div>
                           <div className="space-y-1">
                             <label className="text-[10px] text-muted-foreground">Precio cliente ($)</label>
                             <input type="number" defaultValue={modelo.precio_cliente}
@@ -317,23 +434,11 @@ export function ModelosTab({ stock, setStock, onConfirmarArmado }: ModelosTabPro
                               className="w-full h-7 text-xs px-2 border border-emerald-300 rounded-lg bg-emerald-50 text-emerald-700 font-semibold" />
                           </div>
                           <div className="space-y-1">
-                            <label className="text-[10px] text-muted-foreground flex items-center gap-1">
-                              <Tag className="h-3 w-3" />Precio amigo ($)
-                            </label>
+                            <label className="text-[10px] text-muted-foreground">Precio amigo ($)</label>
                             <input type="number" defaultValue={modelo.precio_amigo}
                               onBlur={e => actualizarPrecio(modelo, "precio_amigo", parseFloat(e.target.value) || 0)}
                               className="w-full h-7 text-xs px-2 border border-blue-300 rounded-lg bg-blue-50 text-blue-700 font-semibold" />
                           </div>
-                        </div>
-                        <div className="flex gap-2 mt-2">
-                          <Button size="sm" variant="outline" className="h-6 text-[10px]"
-                            onClick={() => actualizarPrecio(modelo, "precio_cliente", redondear(modelo.precio_cliente))}>
-                            Redondear precio
-                          </Button>
-                          <Button size="sm" variant="outline" className="h-6 text-[10px]"
-                            onClick={() => actualizarPrecio(modelo, "precio_amigo", redondear(modelo.precio_cliente * (1 - modelo.descuento_amigo / 100)))}>
-                            Recalcular amigo
-                          </Button>
                         </div>
                       </div>
 
@@ -360,8 +465,10 @@ export function ModelosTab({ stock, setStock, onConfirmarArmado }: ModelosTabPro
                       ) : (
                         <div className="flex gap-2 flex-wrap">
                           <Button size="sm" onClick={() => setConfirmandoId(modelo.id)}
-                            className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700">
-                            <Zap className="h-3 w-3 mr-1" />Vender esta PC
+                            disabled={!stockSuficiente}
+                            className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50">
+                            <Zap className="h-3 w-3 mr-1" />
+                            {stockSuficiente ? 'Vender esta PC' : 'Stock insuficiente'}
                           </Button>
                           <Button size="sm" variant="outline" onClick={() => togglePublicado(modelo)}
                             className="h-7 text-xs gap-1">
